@@ -26,4 +26,3 @@ begin
 	Reset_n <= '1' after 200 ns;
 
 end;
-

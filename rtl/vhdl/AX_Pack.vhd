@@ -176,7 +176,7 @@ package AX_Pack is
 	end component;
 
 	component AX_UART
-	port(
+	port
 		Clk			: in std_logic;
 		Reset_n		: in std_logic;
 		UDR_Sel		: in std_logic;
