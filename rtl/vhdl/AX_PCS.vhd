@@ -1,7 +1,7 @@
 --
 -- AT90Sxxxx compatible microcontroller core
 --
--- Version : 0220b
+-- Version : 0224
 --
 -- Copyright (c) 2001-2002 Daniel Wallner (jesus@opencores.org)
 --
@@ -38,7 +38,7 @@
 -- you have the latest version of this file.
 --
 -- The latest version of this file can be found at:
---	http://www.opencores.org/cvsweb.shtml/t51/
+--	http://www.opencores.org/cvsweb.shtml/ax8/
 --
 -- Limitations :
 --	Four level stack
@@ -124,7 +124,7 @@ begin
 	process (Reset_n, Clk)
 	begin
 		if Reset_n = '0' then
-			PC_i <= (others => '1');
+			PC_i <= (others => '0');
 			IPush_i <= '0';
 			if HW_Stack then
 				Stack <= (others => (others => '0'));

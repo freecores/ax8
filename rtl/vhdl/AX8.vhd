@@ -1,7 +1,7 @@
 --
 -- AT90Sxxxx compatible microcontroller core
 --
--- Version : 0221b
+-- Version : 0224
 --
 -- Copyright (c) 2001-2002 Daniel Wallner (jesus@opencores.org)
 --
@@ -38,7 +38,7 @@
 -- you have the latest version of this file.
 --
 -- The latest version of this file can be found at:
---	http://www.opencores.org/cvsweb.shtml/t51/
+--	http://www.opencores.org/cvsweb.shtml/ax8/
 --
 -- Limitations :
 --	No power down sleep, only 16 bit addresses, no external RAM
@@ -49,6 +49,7 @@
 --	0220 : Added support for synchronous ROM
 --	0221 : Changed tristate buses
 --	0221b : Changed tristate buses
+--	0224 : Fixed reset
 
 library IEEE;
 use IEEE.std_logic_1164.all;
@@ -144,6 +145,7 @@ architecture rtl of AX8 is
 	signal	Inst		: std_logic_vector(15 downto 0);
 
 	-- Control signals
+	signal	Rst_r		: std_logic;
 	signal	IO_IR		: std_logic;
 	signal	RAM_IR		: std_logic;
 	signal	PMH_IR		: std_logic;
@@ -183,7 +185,7 @@ architecture rtl of AX8 is
 
 begin
 
-	PreDecode <= '1' when Inst_Skip = '0' and (Pause = "00" or DidPause = "01") else '0';
+	PreDecode <= '1' when Rst_r = '0' and Inst_Skip = '0' and (Pause = "00" or DidPause = "01") else '0';
 
 	-- Addressing control:
 	-- IO and Rd/Rr address are always generated parallel with fetch
@@ -462,10 +464,12 @@ begin
 	process (Reset_n, Clk)
 	begin
 		if Reset_n = '0' then
+			Rst_r <= '1';
 			Inst <= (others => '0'); -- Force NOP at reset.
 			DidPause <= "00";
 			Bit_Pattern <= "00000000";
 		elsif Clk'event and Clk = '1' then
+			Rst_r <= '0';
 			if DidPause = "00" then
 				DidPause <= Pause;
 			else
@@ -473,7 +477,7 @@ begin
 			end if;
 			if (Pause /= "00" and DidPause = "00") or DidPause(1) = '1' then
 				-- Pause: instruction retained
-			elsif Inst_Skip = '1' then
+			elsif Rst_r = '1' or Inst_Skip = '1' then
 				-- Skip/flush: NOP insertion
 				Inst <= (others => '0');
 			else
@@ -595,7 +599,7 @@ begin
 	ROM_Addr <= "0" & std_logic_vector(Z(ROMAddressWidth - 1 downto 1))
 				when Inst = "1001010111001000" and DidPause = "00"
 				else NPC(ROMAddressWidth - 1 downto 0);
-	PCPause <= '1' when (IndSkip = '0' and ((Pause /= "00" and DidPause = "00") or DidPause(1) = '1')) or Sleep = '1' else '0';
+	PCPause <= '1' when Rst_r = '1' or (IndSkip = '0' and ((Pause /= "00" and DidPause = "00") or DidPause(1) = '1')) or Sleep = '1' else '0';
 	RJmp <= '1' when Inst(15 downto 12) = "1100" or
 			(Inst(15 downto 12) = "1101" and DidPause = "10") or
 			(CBranch = '1' and Inst(10) = '0' and ((SREG_i and Bit_Pattern) /= "00000000")) or
