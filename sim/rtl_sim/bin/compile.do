@@ -1,5 +1,6 @@
 vcom ../../../rtl/vhdl/AX_Pack.vhd
-vcom ../../../rtl/vhdl/AX_Reg2.vhd
+vcom ../../../rtl/vhdl/AX_DPRAM.vhd
+vcom ../../../rtl/vhdl/AX_Reg.vhd
 vcom ../../../rtl/vhdl/AX_ALU.vhd
 vcom ../../../rtl/vhdl/AX_PCS.vhd
 vcom ../../../rtl/vhdl/AX_RAM.vhd
