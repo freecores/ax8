@@ -1,7 +1,7 @@
 --
 -- 90S1200 compatible microcontroller core
 --
--- Version : 0221
+-- Version : 0224
 --
 -- Copyright (c) 2001-2002 Daniel Wallner (jesus@opencores.org)
 --
@@ -38,7 +38,7 @@
 -- you have the latest version of this file.
 --
 -- The latest version of this file can be found at:
---	http://www.opencores.org/cvsweb.shtml/t51/
+--	http://www.opencores.org/cvsweb.shtml/ax8/
 --
 -- Limitations :
 --
@@ -48,6 +48,7 @@
 --	0220	: Changed to synchronous ROM
 --	0220b	: Changed reset
 --	0221	: Changed to configurable buses
+--	0224	: Fixed timer interrupt enable
 
 --Registers:												Comments:
 --$3F SREG Status Register									Implemented in the AX8 core
@@ -206,7 +207,7 @@ begin
 	end process;
 
 	Int_Trig(1) <= '0' when Int0_En = '0' else not Int0_r(1) when ISC0 = "00" else Int0_ET;
-	Int_Trig(2) <= '1' when TOIE0 = '1' and TOV0 = '0' else '0';
+	Int_Trig(2) <= '1' when TOIE0 = '1' and TOV0 = '1' else '0';
 	Int_Trig(15 downto 3) <= (others => '0');
 
 	rom : ROM1200 port map (
