@@ -1,7 +1,7 @@
 --
 -- AT90Sxxxx compatible microcontroller core
 --
--- Version : 0220
+-- Version : 0221
 --
 -- Copyright (c) 2001-2002 Daniel Wallner (jesus@opencores.org)
 --
@@ -47,6 +47,7 @@
 --
 --	0146 : First release
 --	0220 : Added support for synchronous ROM
+--	0221 : Changed tristate buses
 
 library IEEE;
 use IEEE.std_logic_1164.all;
@@ -57,7 +58,8 @@ entity AX8 is
 	generic(
 		ROMAddressWidth : integer;
 		RAMAddressWidth : integer;
-		BigISet : boolean
+		BigISet : boolean;
+		TriState : boolean := false
 	);
 	port(
 		Clk			: in std_logic;
@@ -113,6 +115,7 @@ architecture rtl of AX8 is
 	signal	Rr_Addr		: std_logic_vector(15 downto 0);
 	signal	IO_Addr_i	: std_logic_vector(5 downto 0);
 
+	signal	Wr_Data		: std_logic_vector(7 downto 0);
 	signal	Rd_Data		: std_logic_vector(7 downto 0);
 	signal	Rr_Data		: std_logic_vector(7 downto 0);
 
@@ -120,7 +123,7 @@ architecture rtl of AX8 is
 
 	signal	Offset		: std_logic_vector(11 downto 0);
 
-	signal	Res_Bus		: std_logic_vector(7 downto 0);
+	signal	Q			: std_logic_vector(7 downto 0);
 
 	signal	Disp		: std_logic_vector(5 downto 0);
 
@@ -554,7 +557,7 @@ begin
 			Wr => Reg_Wr,
 			Rd_Addr => Rd_Addr(4 downto 0),
 			Rr_Addr => Rr_Addr(4 downto 0),
-			Data_In => Res_Bus,
+			Data_In => Wr_Data,
 			Rd_Data => Rd_Data,
 			Rr_Data => Rr_Data,
 			Add => Add,
@@ -582,7 +585,7 @@ begin
 				Rd_Addr => Rr_Addr(RAMAddressWidth downto 0),
 				Wr_Addr => Rd_Addr(RAMAddressWidth downto 0),
 				Wr => RAM_Wr_ID,
-				Data_In => Res_Bus,
+				Data_In => Wr_Data,
 				Data_Out => RAM_Data);
 	end generate;
 
@@ -626,7 +629,7 @@ begin
 			Reset_n => Reset_n,
 			Offs_In => Offset,
 			Z => Z,
-			Data_In => Res_Bus,
+			Data_In => Wr_Data,
 			Pause => PCPause,
 			Push => Push,
 			Pop => Pop,
@@ -642,15 +645,27 @@ begin
 
 	-- ALU
 	PassB <= '1' when (Pause /= "00" and DidPause /= "01") or IPush = '1' else '0';
-	Pass_Mux <= Inst(11 downto 8) & Inst(3 downto 0) when Imm_Op = '1' else "ZZZZZZZZ";
-	Pass_Mux <= IO_RData when IO_Rd_i = '1' else "ZZZZZZZZ";
-	Pass_Mux <= RAM_Data when RAM_Rd = '1' else "ZZZZZZZZ";
-	Pass_Mux <= PCH when HPC_Rd = '1' and BigIset else "ZZZZZZZZ";
-	Pass_Mux <= PC(7 downto 0) when LPC_Rd = '1' and BigIset else "ZZZZZZZZ";
-	Pass_Mux <= Rr_Data when Reg_Rd = '1' else "ZZZZZZZZ";
-	Pass_Mux <= ROM_Data(15 downto 8) when PMH_Rd = '1' and BigIset else "ZZZZZZZZ";
-	Pass_Mux <= ROM_Data(7 downto 0) when PML_Rd = '1' and BigIset else "ZZZZZZZZ";
-	Res_Bus(7 downto 0) <= Pass_Mux when Do_Other = '1' else "ZZZZZZZZ";
+	gNoTri : if not TriState generate
+		Pass_Mux <= Inst(11 downto 8) & Inst(3 downto 0) when Imm_Op = '1' else
+			RAM_Data when RAM_Rd = '1' else
+			PCH when HPC_Rd = '1' and BigIset else
+			PC(7 downto 0) when LPC_Rd = '1' and BigIset else
+			Rr_Data when Reg_Rd = '1' else
+			ROM_Data(15 downto 8) when PMH_Rd = '1' and BigIset else
+			ROM_Data(7 downto 0) when PML_Rd = '1' and BigIset else
+			IO_RData;
+	end generate;
+	gTri : if TriState generate
+		Pass_Mux <= Inst(11 downto 8) & Inst(3 downto 0) when Imm_Op = '1' else "ZZZZZZZZ";
+		Pass_Mux <= IO_RData when IO_Rd_i = '1' else "ZZZZZZZZ";
+		Pass_Mux <= RAM_Data when RAM_Rd = '1' else "ZZZZZZZZ";
+		Pass_Mux <= PCH when HPC_Rd = '1' and BigIset else "ZZZZZZZZ";
+		Pass_Mux <= PC(7 downto 0) when LPC_Rd = '1' and BigIset else "ZZZZZZZZ";
+		Pass_Mux <= Rr_Data when Reg_Rd = '1' else "ZZZZZZZZ";
+		Pass_Mux <= ROM_Data(15 downto 8) when PMH_Rd = '1' and BigIset else "ZZZZZZZZ";
+		Pass_Mux <= ROM_Data(7 downto 0) when PML_Rd = '1' and BigIset else "ZZZZZZZZ";
+	end generate;
+	Wr_Data <= Pass_Mux when Do_Other = '1' else Q;
 	Op_Mux <= Inst(11 downto 8) & Inst(3 downto 0) when Imm_Op = '1' else Rr_Data;
 	process (Clk)
 	begin
@@ -694,14 +709,13 @@ begin
 			ROM_Data => ROM_Data,
 			A => Rd_Data,
 			B => Op_Mux,
-			Q(7 downto 0) => Res_Bus,
-			Q(8) => Status_D(0),
+			Q => Q,
 			SREG => SREG,
 			PassB => PassB,
 			Skip => Inst_Skip,
 			Do_Other => Do_Other,
 			Z_Skip => Z_Skip,
-			Status_D => Status_D(6 downto 1),
+			Status_D => Status_D,
 			Status_Wr => Status_Wr);
 
 	-- Interrupts and stuff

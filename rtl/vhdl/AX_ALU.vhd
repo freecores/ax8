@@ -1,7 +1,7 @@
 --
 -- AT90Sxxxx compatible microcontroller core
 --
--- Version : 0146
+-- Version : 0221
 --
 -- Copyright (c) 2001-2002 Daniel Wallner (jesus@opencores.org)
 --
@@ -51,18 +51,21 @@ use IEEE.numeric_std.all;
 use work.AX_Pack.all;
 
 entity AX_ALU is
-	port (
+	generic(
+		TriState	: boolean := false
+	);
+	port(
 		Clk			: in std_logic;
 		ROM_Data	: in std_logic_vector(15 downto 0);
 		A			: in std_logic_vector(7 downto 0);
 		B			: in std_logic_vector(7 downto 0);
-		Q			: inout std_logic_vector(8 downto 0);
+		Q			: out std_logic_vector(7 downto 0);
 		SREG		: in std_logic_vector(7 downto 0);
 		PassB		: in std_logic;
 		Skip		: in std_logic;
 		Do_Other	: out std_logic;
 		Z_Skip		: out std_logic;
-		Status_D	: out std_logic_vector(6 downto 1);
+		Status_D	: out std_logic_vector(6 downto 0);
 		Status_Wr	: out std_logic_vector(6 downto 0)	-- T,H,S,V,N,Z,C
 	);
 end AX_ALU;
@@ -92,6 +95,13 @@ architecture rtl of AX_ALU is
 	signal	Bit_Pattern		: std_logic_vector(7 downto 0);
 	signal	Bit_Test		: std_logic_vector(7 downto 0);
 
+	signal	Q_i				: std_logic_vector(7 downto 0);
+	signal	Q_L				: std_logic_vector(7 downto 0);
+	signal	Q_C				: std_logic_vector(7 downto 0);
+	signal	Q_S				: std_logic_vector(7 downto 0);
+	signal	Q_R				: std_logic_vector(7 downto 0);
+	signal	Q_B				: std_logic_vector(7 downto 0);
+
 	-- AddSub intermediate signals
 	signal	Carry7_v		: std_logic;
 	signal	Overflow_v		: std_logic;
@@ -104,7 +114,27 @@ architecture rtl of AX_ALU is
 
 begin
 
+	Q <= Q_i;
+
 	Do_Other <= Do_PASSB;
+
+	gNoTri : if not TriState generate
+		Q_i <= Q_v when Do_ADD = '1' or Do_SUB = '1' else
+			Q_L when Do_AND = '1' or Do_OR = '1' or Do_XOR = '1' else
+			Q_C when Do_COM = '1' else
+			Q_S when Do_SWAP = '1' else
+			Q_R when Do_ASR = '1' or Do_LSR = '1' or Do_ROR = '1' else
+			Q_B;
+	end generate;
+
+	gTri : if TriState generate
+		Q_i <= Q_v when Do_ADD = '1' or Do_SUB = '1' else "ZZZZZZZZ";
+		Q_i <= Q_L when Do_AND = '1' or Do_OR = '1' or Do_XOR = '1' else "ZZZZZZZZ";
+		Q_i <= Q_C when Do_COM = '1' else "ZZZZZZZZ";
+		Q_i <= Q_S when Do_SWAP = '1' else "ZZZZZZZZ";
+		Q_i <= Q_R when Do_ASR = '1' or Do_LSR = '1' or Do_ROR = '1' else "ZZZZZZZZ";
+		Q_i <= Q_B when Do_BLD = '1' else "ZZZZZZZZ";
+	end generate;
 
 	process (Clk)
 	begin
@@ -257,32 +287,32 @@ begin
 	AddSub(AAS(7 downto 7), BAS(7 downto 7), Do_SUB, Carry7_v, Q_v(7 downto 7), Carry_v);
 	OverFlow_v <= Carry_v xor Carry7_v;
 	Status_D(5) <= HalfCarry_v xor Do_SUB;	-- H
-	Q(7 downto 0) <= Q_v when Do_ADD = '1' or Do_SUB = '1' else "ZZZZZZZZ";
-	Q(8) <= Carry_v xor Do_SUB when Do_ADD = '1' or Do_SUB = '1' else 'Z';
 
-	Q(7 downto 0) <= (A and B) when Do_AND = '1' else
+	Q_L <= (A and B) when Do_AND = '1' else
 		(A or B) when Do_OR = '1' else
-		(A xor B) when Do_XOR = '1' else "ZZZZZZZZ";
+		(A xor B);
 
-	Q <= '1' & (not A) when Do_COM = '1' else "ZZZZZZZZZ";
+	Q_C <= (not A);
 
-	Q(7 downto 0) <= A(3 downto 0) & A(7 downto 4) when Do_SWAP = '1' else "ZZZZZZZZ";
+	Q_S <= A(3 downto 0) & A(7 downto 4);
 
-	Q <= A(0) & A(7) & A(7 downto 1) when Do_ASR = '1' else "ZZZZZZZZZ";
-	Q <= A(0) & "0" & A(7 downto 1) when Do_LSR = '1' else "ZZZZZZZZZ";
-	Q <= A(0) & SREG(0) & A(7 downto 1) when Do_ROR = '1' else "ZZZZZZZZZ";
+	Q_R(6 downto 0) <=  A(7 downto 1);
+	Q_R(7) <= (A(7) and Do_ASR) or (SREG(0) and Do_ROR);
 
-	Q(7 downto 0) <= ((not Bit_Pattern) and A) when Do_BLD = '1' and SREG(6) = '0' else
-					(Bit_Pattern or A) when Do_BLD = '1' and SREG(6) = '1' else "ZZZZZZZZ";
+	Q_B <= ((not Bit_Pattern) and A) when SREG(6) = '0' else
+			(Bit_Pattern or A);
+
 	Status_D(6) <= '1' when (Bit_Pattern and A) /= "00000000" else '0';
 
 	Overflow_t <= Overflow_v when Do_SUB = '1' or Do_ADD = '1' else
-		Q(7) xor Q(8) when (Do_ASR or Do_LSR or Do_ROR) = '1' else '0';	-- V
+		Q_i(7) xor A(0) when (Do_ASR or Do_LSR or Do_ROR) = '1' else '0';	-- V
 	Status_D(3) <= Overflow_t;
-	Status_D(2) <= Q(7);	-- N
-	Status_D(4) <= Overflow_t xor Q(7);	-- SREG(3) xor SREG(2);		-- S
-	Status_D(1) <= '1' when Q(7 downto 0) = "00000000" and (Do_SUB = '0' or Use_Carry = '0') else
-		SREG(1) when Q(7 downto 0) = "00000000" and Do_SUB = '1' and Use_Carry = '1' else '0';	-- Z
+	Status_D(2) <= Q_i(7);	-- N
+	Status_D(4) <= Overflow_t xor Q_i(7);	-- SREG(3) xor SREG(2);		-- S
+	Status_D(1) <= '1' when Q_i(7 downto 0) = "00000000" and (Do_SUB = '0' or Use_Carry = '0') else
+		SREG(1) when Q_i(7 downto 0) = "00000000" and Do_SUB = '1' and Use_Carry = '1' else '0';	-- Z
+	Status_D(0) <= ((Carry_v xor Do_SUB) and (Do_ADD or Do_SUB)) or
+					(A(0) and (Do_ASR or Do_LSR or Do_ROR)) or Do_COM;
 
 	process (Do_SUB, Do_ADD, Do_COM, Do_ASR, Do_LSR, Do_ROR, Do_AND, Do_XOR, Do_OR, Do_INC, Do_DEC, Do_BST)
 	begin

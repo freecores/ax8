@@ -1,7 +1,7 @@
 --
 -- AT90Sxxxx compatible microcontroller core
 --
--- Version : 0220
+-- Version : 0221
 --
 -- Copyright (c) 2001-2002 Daniel Wallner (jesus@opencores.org)
 --
@@ -52,18 +52,18 @@ use IEEE.numeric_std.all;
 package AX_Pack is
 
 	component AX_ALU
-	port (
+	port(
 		Clk			: in std_logic;
 		ROM_Data	: in std_logic_vector(15 downto 0);
 		A			: in std_logic_vector(7 downto 0);
 		B			: in std_logic_vector(7 downto 0);
-		Q			: inout std_logic_vector(8 downto 0);
+		Q			: out std_logic_vector(7 downto 0);
 		SREG		: in std_logic_vector(7 downto 0);
 		PassB		: in std_logic;
 		Skip		: in std_logic;
 		Do_Other	: out std_logic;
 		Z_Skip		: out std_logic;
-		Status_D	: out std_logic_vector(6 downto 1);
+		Status_D	: out std_logic_vector(6 downto 0);
 		Status_Wr	: out std_logic_vector(6 downto 0)	-- T,H,S,V,N,Z,C
 	);
 	end component;
@@ -93,11 +93,23 @@ package AX_Pack is
 	);
 	end component;
 
+	component AX_DPRAM
+	port(
+		Clk			: in std_logic;
+		Rst_n		: in std_logic;
+		Wr			: in std_logic;
+		Rd_Addr		: in std_logic_vector(4 downto 0);
+		Wr_Addr		: in std_logic_vector(4 downto 0);
+		Data_In		: in std_logic_vector(7 downto 0);
+		Data_Out	: out std_logic_vector(7 downto 0)
+	);
+	end component;
+
 	component AX_Reg
 	generic(
 		BigISet : boolean
 	);
-	port (
+	port(
 		Clk			: in std_logic;
 		Reset_n		: in std_logic;
 		Wr			: in std_logic;
@@ -127,7 +139,7 @@ package AX_Pack is
 	generic(
 		RAMAddressWidth : integer
 	);
-	port (
+	port(
 		Clk			: in std_logic;
 		Rd_Addr		: in std_logic_vector(RAMAddressWidth downto 0);
 		Wr_Addr		: in std_logic_vector(RAMAddressWidth downto 0);
