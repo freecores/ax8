@@ -1,7 +1,7 @@
 --
 -- AT90Sxxxx compatible microcontroller core
 --
--- Version : 0146
+-- Version : 0221
 --
 -- Copyright (c) 2001-2002 Daniel Wallner (jesus@opencores.org)
 --
@@ -44,6 +44,8 @@
 --
 -- File history :
 --
+--	0146	: First release
+--	0221	: Removed tristate
 
 library IEEE;
 use IEEE.std_logic_1164.all;
@@ -61,7 +63,10 @@ entity AX_UART is
 		Wr			: in std_logic;
 		TXC_Clr		: in std_logic;
 		Data_In		: in std_logic_vector(7 downto 0);
-		Data_Out	: out std_logic_vector(7 downto 0);
+		UDR			: out std_logic_vector(7 downto 0);
+		USR			: out std_logic_vector(7 downto 3);
+		UCR			: out std_logic_vector(7 downto 0);
+		UBRR		: out std_logic_vector(7 downto 0);
 		RXD			: in std_logic;
 		TXD			: out std_logic;
 		Int_RX		: out std_logic;
@@ -72,10 +77,10 @@ end AX_UART;
 
 architecture rtl of AX_UART is
 
-	signal	UDR				: std_logic_vector(7 downto 0);	-- UART I/O Data Register
-	signal	USR				: std_logic_vector(7 downto 3);	-- UART Status Register
-	signal	UCR				: std_logic_vector(7 downto 0);	-- UART Control Register
-	signal	UBRR			: std_logic_vector(7 downto 0);	-- UART Baud Rate Register
+	signal	UDR_i			: std_logic_vector(7 downto 0);	-- UART I/O Data Register
+	signal	USR_i			: std_logic_vector(7 downto 3);	-- UART Status Register
+	signal	UCR_i			: std_logic_vector(7 downto 0);	-- UART Control Register
+	signal	UBRR_i			: std_logic_vector(7 downto 0);	-- UART Baud Rate Register
 
 	signal	Baud16			: std_logic;
 
@@ -93,23 +98,23 @@ architecture rtl of AX_UART is
 begin
 
 	-- Registers
-	Data_Out <= UDR when UDR_Sel = '1' and Rd = '1' else "ZZZZZZZZ";
-	Data_Out <= USR & "000" when USR_Sel = '1' and Rd = '1' else "ZZZZZZZZ";
-	Data_Out <= UCR(7 downto 1) & "0" when UCR_Sel = '1' and Rd = '1' else "ZZZZZZZZ";
-	Data_Out <= UBRR when UBRR_Sel = '1' and Rd = '1' else "ZZZZZZZZ";
+	UDR <= UDR_i;
+	USR <= USR_i;
+	UCR <= UCR_i;
+	UBRR <= UBRR_i;
 	process (Reset_n, Clk)
 	begin
 		if Reset_n = '0' then
-			UCR(7 downto 2) <= "000000";
-			UCR(0) <= '0';
-			UBRR <= "00000000";
+			UCR_i(7 downto 2) <= "000000";
+			UCR_i(0) <= '0';
+			UBRR_i <= "00000000";
 		elsif Clk'event and Clk = '1' then
 			if UCR_Sel = '1' and Wr = '1' then
-				UCR(7 downto 2) <= Data_In(7 downto 2);
-				UCR(0) <= Data_In(0);
+				UCR_i(7 downto 2) <= Data_In(7 downto 2);
+				UCR_i(0) <= Data_In(0);
 			end if;
 			if UBRR_Sel = '1' and Wr = '1' then
-				UBRR <= Data_In;
+				UBRR_i <= Data_In;
 			end if;
 		end if;
 	end process;
@@ -123,7 +128,7 @@ begin
 			Baud16 <= '0';
 		elsif Clk'event and Clk='1' then
 			if Baud_Cnt = "00000000" then
-				Baud_Cnt := unsigned(UBRR);
+				Baud_Cnt := unsigned(UBRR_i);
 				Baud16 <= '1';
 			else
 				Baud_Cnt := Baud_Cnt - 1;
@@ -154,23 +159,23 @@ begin
 	end process;
 
 	-- Receive state machine
-	Int_RX <= USR(7) and UCR(7);
+	Int_RX <= USR_i(7) and UCR_i(7);
 	process (Clk, Reset_n)
 	begin
 		if Reset_n = '0' then
-			USR(7) <= '0';
-			USR(4) <= '0';
-			USR(3) <= '0';
-			UCR(1) <= '1';
-			UDR <= "00000000";
+			USR_i(7) <= '0';
+			USR_i(4) <= '0';
+			USR_i(3) <= '0';
+			UCR_i(1) <= '1';
+			UDR_i <= "00000000";
 			Overflow_t <= '0';
 			Bit_Phase <= "0000";
 			RX_ShiftReg(8 downto 0) <= "000000000";
 			RX_Bit_Cnt <= 0;
 		elsif Clk'event and Clk = '1' then
 			if UDR_Sel = '1' and Rd = '1' then
-				USR(7) <= '0';
-				USR(3) <= Overflow_t;
+				USR_i(7) <= '0';
+				USR_i(3) <= Overflow_t;
 			end if;
 			if Baud16 = '1' then
 				if RX_Bit_Cnt = 0 and (RX_Filtered = '1' or Bit_Phase = "0111") then
@@ -184,23 +189,23 @@ begin
 					end if;
 				elsif Bit_Phase = "1111" then
 					RX_Bit_Cnt <= RX_Bit_Cnt + 1;
-					if (UCR(2) = '0' and RX_Bit_Cnt = 9) or
-						(UCR(2) = '1' and RX_Bit_Cnt = 10) then -- Stop bit
+					if (UCR_i(2) = '0' and RX_Bit_Cnt = 9) or
+						(UCR_i(2) = '1' and RX_Bit_Cnt = 10) then -- Stop bit
 						RX_Bit_Cnt <= 0;
-						if UCR(4) = '1' then
-							USR(7) <= '1'; -- UART Receive complete
-							USR(4) <= not RX_Filtered; -- Framing error
-							Overflow_t <= USR(7);
-							if USR(7) = '0' or (UDR_Sel = '1' and Rd = '1') then
+						if UCR_i(4) = '1' then
+							USR_i(7) <= '1'; -- UART Receive complete
+							USR_i(4) <= not RX_Filtered; -- Framing error
+							Overflow_t <= USR_i(7);
+							if USR_i(7) = '0' or (UDR_Sel = '1' and Rd = '1') then
 								Overflow_t <= '0';
-								USR(3) <= '0';
-								UDR <= RX_ShiftReg(7 downto 0);
-								UCR(1) <= RX_ShiftReg(8);
+								USR_i(3) <= '0';
+								UDR_i <= RX_ShiftReg(7 downto 0);
+								UCR_i(1) <= RX_ShiftReg(8);
 							end if;
 						end if;
 					else
 						RX_ShiftReg(7 downto 0) <= RX_ShiftReg(8 downto 1);
-						if UCR(2) = '1' then	-- CHR9
+						if UCR_i(2) = '1' then	-- CHR9
 							RX_ShiftReg(8) <= RX_Filtered;
 						else
 							RX_ShiftReg(7) <= RX_Filtered;
@@ -230,49 +235,49 @@ begin
 	end process;
 
 	-- Transmit state machine
-	Int_TR <= USR(5) and UCR(5);
-	Int_TC <= USR(6) and UCR(6);
+	Int_TR <= USR_i(5) and UCR_i(5);
+	Int_TC <= USR_i(6) and UCR_i(6);
 	process (Clk, Reset_n)
 	begin
 		if Reset_n = '0' then
-			USR(6) <= '0';
-			USR(5) <= '1';
+			USR_i(6) <= '0';
+			USR_i(5) <= '1';
 			TX_Bit_Cnt <= 0;
 			TX_ShiftReg <= (others => '0');
 				TX_Data <= (others => '0');
 			TXD <= '1';
 		elsif Clk'event and Clk = '1' then
 			if TXC_Clr = '1' or (USR_Sel = '1' and Wr = '1' and Data_In(6) = '1') then
-				USR(6) <= '0';
+				USR_i(6) <= '0';
 			end if;
-			if UDR_Sel = '1' and Wr = '1' and UCR(3) = '1' then
-				USR(5) <= '0';
+			if UDR_Sel = '1' and Wr = '1' and UCR_i(3) = '1' then
+				USR_i(5) <= '0';
 				TX_Data <= Data_In;
 			end if;
 			if TX_Tick = '1' then
 				case TX_Bit_Cnt is
 				when 0 =>
-					if USR(5) = '0' then
+					if USR_i(5) = '0' then
 						TX_Bit_Cnt <= 1;
 					end if;
 					TXD <= '1';
 				when 1 => -- Start bit
 					TX_ShiftReg(7 downto 0) <= TX_Data;
-					TX_ShiftReg(8) <= UCR(0);
-					USR(5) <= '1';
+					TX_ShiftReg(8) <= UCR_i(0);
+					USR_i(5) <= '1';
 					TXD <= '0';
 					TX_Bit_Cnt <= TX_Bit_Cnt + 1;
 				when others =>
 					TX_Bit_Cnt <= TX_Bit_Cnt + 1;
-					if UCR(2) = '1' then	-- CHR9
+					if UCR_i(2) = '1' then	-- CHR9
 						if TX_Bit_Cnt = 10 then
 							TX_Bit_Cnt <= 0;
-							USR(6) <= '1';
+							USR_i(6) <= '1';
 						end if;
 					else
 						if TX_Bit_Cnt = 9 then
 							TX_Bit_Cnt <= 0;
-							USR(6) <= '1';
+							USR_i(6) <= '1';
 						end if;
 					end if;
 					TXD <= TX_ShiftReg(0);

@@ -1,7 +1,7 @@
 --
 -- AT90Sxxxx compatible microcontroller core
 --
--- Version : 0221
+-- Version : 0221b
 --
 -- Copyright (c) 2001-2002 Daniel Wallner (jesus@opencores.org)
 --
@@ -163,11 +163,13 @@ package AX_Pack is
 		Sleep_En	: in std_logic;
 		Int_Trig	: in std_logic_vector(15 downto 1);
 		Int_Acc		: out std_logic_vector(15 downto 1);
+		SREG		: out std_logic_vector(7 downto 0);
+		SP			: out std_logic_vector(15 downto 0);
 		IO_Rd		: out std_logic;
 		IO_Wr		: out std_logic;
 		IO_Addr		: out std_logic_vector(5 downto 0);
+		IO_RData	: in std_logic_vector(7 downto 0);
 		IO_WData	: out std_logic_vector(7 downto 0);
-		IO_RData	: inout std_logic_vector(7 downto 0);
 		WDR			: out std_logic
 	);
 	end component;
@@ -176,13 +178,14 @@ package AX_Pack is
 	port(
 		Clk			: in std_logic;
 		Reset_n		: in std_logic;
-		PORT_Sel	: std_logic;
-		DDR_Sel		: std_logic;
-		PIN_Sel		: std_logic;
-		Rd			: in std_logic;
+		PORT_Sel	: in std_logic;
+		DDR_Sel		: in std_logic;
+		PIN_Sel		: in std_logic;
 		Wr			: in std_logic;
 		Data_In		: in std_logic_vector(7 downto 0);
-		Data_Out	: out std_logic_vector(7 downto 0);
+		Dir			: out std_logic_vector(7 downto 0);
+		Port_Input	: out std_logic_vector(7 downto 0);
+		Port_Output	: out std_logic_vector(7 downto 0);
 		IOPort		: inout std_logic_vector(7 downto 0)
 	);
 	end component;
@@ -199,7 +202,10 @@ package AX_Pack is
 		Wr			: in std_logic;
 		TXC_Clr		: in std_logic;
 		Data_In		: in std_logic_vector(7 downto 0);
-		Data_Out	: out std_logic_vector(7 downto 0);
+		UDR			: out std_logic_vector(7 downto 0);
+		USR			: out std_logic_vector(7 downto 3);
+		UCR			: out std_logic_vector(7 downto 0);
+		UBRR		: out std_logic_vector(7 downto 0);
 		RXD			: in std_logic;
 		TXD			: out std_logic;
 		Int_RX		: out std_logic;
@@ -215,10 +221,10 @@ package AX_Pack is
 		T			: in std_logic;
 		TCCR_Sel	: in std_logic;
 		TCNT_Sel	: in std_logic;
-		Rd			: in std_logic;
 		Wr			: in std_logic;
 		Data_In		: in std_logic_vector(7 downto 0);
-		Data_Out	: out std_logic_vector(7 downto 0);
+		TCCR		: out std_logic_vector(2 downto 0);
+		TCNT		: out std_logic_vector(7 downto 0);
 		Int			: out std_logic
 	);
 	end component;
@@ -237,7 +243,14 @@ package AX_Pack is
 		Rd			: in std_logic;
 		Wr			: in std_logic;
 		Data_In		: in std_logic_vector(7 downto 0);
-		Data_Out	: out std_logic_vector(7 downto 0);
+		COM			: out std_logic_vector(1 downto 0);
+		PWM			: out std_logic_vector(1 downto 0);
+		CRBH		: out std_logic_vector(1 downto 0);
+		CRBL		: out std_logic_vector(3 downto 0);
+		TCNT		: out std_logic_vector(15 downto 0);
+		IC			: out std_logic_vector(15 downto 0);
+		OCR			: out std_logic_vector(15 downto 0);
+		Tmp			: out std_logic_vector(15 downto 0);
 		OC			: out std_logic;
 		Int_TO		: out std_logic;
 		Int_OC		: out std_logic;

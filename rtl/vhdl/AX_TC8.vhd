@@ -1,7 +1,7 @@
 --
 -- AT90Sxxxx compatible microcontroller core
 --
--- Version : 0146
+-- Version : 0221
 --
 -- Copyright (c) 2001-2002 Daniel Wallner (jesus@opencores.org)
 --
@@ -44,6 +44,8 @@
 --
 -- File history :
 --
+--	0146	: First release
+--	0221	: Removed tristate
 
 library IEEE;
 use IEEE.std_logic_1164.all;
@@ -56,45 +58,46 @@ entity AX_TC8 is
 		T			: in std_logic;
 		TCCR_Sel	: in std_logic;
 		TCNT_Sel	: in std_logic;
-		Rd			: in std_logic;
 		Wr			: in std_logic;
 		Data_In		: in std_logic_vector(7 downto 0);
-		Data_Out	: out std_logic_vector(7 downto 0);
+		TCCR		: out std_logic_vector(2 downto 0);
+		TCNT		: out std_logic_vector(7 downto 0);
 		Int			: out std_logic
 	);
 end AX_TC8;
 
 architecture rtl of AX_TC8 is
 
-	signal	TCCR		: std_logic_vector(2 downto 0);	-- Control Register
-	signal	TCNT		: std_logic_vector(7 downto 0);	-- Timer/Counter
+	signal	TCCR_i		: std_logic_vector(2 downto 0);	-- Control Register
+	signal	TCNT_i		: std_logic_vector(7 downto 0);	-- Timer/Counter
 
 	signal	Tick		: std_logic;
 
 begin
 
+	TCCR <= TCCR_i;
+	TCNT <= TCNT_i;
+
 	-- Registers and counter
-	Data_Out <= "00000" & TCCR when Rd = '1' and TCCR_Sel = '1' else "ZZZZZZZZ";
-	Data_Out <= TCNT when Rd = '1' and TCNT_Sel = '1' else "ZZZZZZZZ";
 	process (Reset_n, Clk)
 	begin
 		if Reset_n = '0' then
-			TCCR <= "000";
-			TCNT <= "00000000";
+			TCCR_i<= "000";
+			TCNT_i <= "00000000";
 			Int <= '0';
 		elsif Clk'event and Clk = '1' then
 			if TCCR_Sel = '1' and Wr = '1' then
-				TCCR <= Data_In(2 downto 0);
+				TCCR_i <= Data_In(2 downto 0);
 			end if;
 			Int <= '0';
 			if Tick = '1' then
-				TCNT <= std_logic_vector(unsigned(TCNT) + 1);
-				if TCNT = "11111111" then
+				TCNT_i <= std_logic_vector(unsigned(TCNT_i) + 1);
+				if TCNT_i = "11111111" then
 					Int <= '1';
 				end if;
 			end if;
 			if TCNT_Sel = '1' and Wr = '1' then
-				TCNT <= Data_In;
+				TCNT_i <= Data_In;
 				Int <= '0';
 			end if;
 		end if;
@@ -111,7 +114,7 @@ begin
 			T_r := "00";
 		elsif Clk'event and Clk='1' then
 			Tick <= '0';
-			case TCCR is
+			case TCCR_i is
 			when "000" =>
 			when "001" =>
 				Tick <= '1';

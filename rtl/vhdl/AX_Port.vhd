@@ -1,7 +1,7 @@
 --
 -- AT90Sxxxx compatible microcontroller core
 --
--- Version : 0146
+-- Version : 0221
 --
 -- Copyright (c) 2001-2002 Daniel Wallner (jesus@opencores.org)
 --
@@ -41,10 +41,12 @@
 --	http://www.opencores.org/cvsweb.shtml/t51/
 --
 -- Limitations :
---	No pull-up (for obvious reasons)
+--	No pull-up
 --
 -- File history :
 --
+--	0146	: First release
+--	0221	: Removed tristate
 
 library IEEE;
 use IEEE.std_logic_1164.all;
@@ -53,37 +55,36 @@ entity AX_Port is
 	port(
 		Clk			: in std_logic;
 		Reset_n		: in std_logic;
-		PORT_Sel	: std_logic;
-		DDR_Sel		: std_logic;
-		PIN_Sel		: std_logic;
-		Rd			: in std_logic;
+		PORT_Sel	: in std_logic;
+		DDR_Sel		: in std_logic;
+		PIN_Sel		: in std_logic;
 		Wr			: in std_logic;
 		Data_In		: in std_logic_vector(7 downto 0);
-		Data_Out	: out std_logic_vector(7 downto 0);
+		Dir			: out std_logic_vector(7 downto 0);
+		Port_Input	: out std_logic_vector(7 downto 0);
+		Port_Output	: out std_logic_vector(7 downto 0);
 		IOPort		: inout std_logic_vector(7 downto 0)
 	);
 end AX_Port;
 
 architecture rtl of AX_Port is
 
-	signal Dir			: std_logic_vector(7 downto 0);
-	signal Port_Output	: std_logic_vector(7 downto 0);
-	signal Port_Input	: std_logic_vector(7 downto 0);
+	signal Dir_i			: std_logic_vector(7 downto 0);
+	signal Port_Output_i	: std_logic_vector(7 downto 0);
 
 begin
 
-	IOPort(0) <= Port_Output(0) when Dir(0) = '1' else 'Z';
-	IOPort(1) <= Port_Output(1) when Dir(1) = '1' else 'Z';
-	IOPort(2) <= Port_Output(2) when Dir(2) = '1' else 'Z';
-	IOPort(3) <= Port_Output(3) when Dir(3) = '1' else 'Z';
-	IOPort(4) <= Port_Output(4) when Dir(4) = '1' else 'Z';
-	IOPort(5) <= Port_Output(5) when Dir(5) = '1' else 'Z';
-	IOPort(6) <= Port_Output(6) when Dir(6) = '1' else 'Z';
-	IOPort(7) <= Port_Output(7) when Dir(7) = '1' else 'Z';
+	Dir <= Dir_i;
+	Port_Output <= Port_Output_i;
 
-	Data_Out <= Port_Input when PIN_Sel = '1' and Rd = '1' else "ZZZZZZZZ";
-	Data_Out <= Dir when DDR_Sel = '1' and Rd = '1' else "ZZZZZZZZ";
-	Data_Out <= Port_Output when PORT_Sel = '1' and Rd = '1' else "ZZZZZZZZ";
+	IOPort(0) <= Port_Output_i(0) when Dir_i(0) = '1' else 'Z';
+	IOPort(1) <= Port_Output_i(1) when Dir_i(1) = '1' else 'Z';
+	IOPort(2) <= Port_Output_i(2) when Dir_i(2) = '1' else 'Z';
+	IOPort(3) <= Port_Output_i(3) when Dir_i(3) = '1' else 'Z';
+	IOPort(4) <= Port_Output_i(4) when Dir_i(4) = '1' else 'Z';
+	IOPort(5) <= Port_Output_i(5) when Dir_i(5) = '1' else 'Z';
+	IOPort(6) <= Port_Output_i(6) when Dir_i(6) = '1' else 'Z';
+	IOPort(7) <= Port_Output_i(7) when Dir_i(7) = '1' else 'Z';
 
 	process (Clk)
 	begin
@@ -95,14 +96,14 @@ begin
 	process (Reset_n, Clk)
 	begin
 		if Reset_n = '0' then
-			Dir <= "00000000";
-			Port_Output <= "00000000";
+			Dir_i <= "00000000";
+			Port_Output_i <= "00000000";
 		elsif Clk'event and Clk = '1' then
 			if DDR_Sel = '1' and Wr = '1' then
-				Dir <= Data_In;
+				Dir_i <= Data_In;
 			end if;
 			if PORT_Sel = '1' and Wr = '1' then
-				Port_Output <= Data_In;
+				Port_Output_i <= Data_In;
 			end if;
 		end if;
 	end process;

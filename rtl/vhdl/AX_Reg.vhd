@@ -1,7 +1,7 @@
 --
 -- AT90Sxxxx compatible microcontroller core
 --
--- Version : 0221
+-- Version : 0221b
 --
 -- Copyright (c) 2001-2002 Daniel Wallner (jesus@opencores.org)
 --
@@ -45,6 +45,7 @@
 -- File history :
 --
 -- 0221 : Moved register bank to separate file
+-- 0221 : Changed buses
 
 library IEEE;
 use IEEE.std_logic_1164.all;
@@ -54,7 +55,7 @@ use work.AX_Pack.all;
 entity AX_Reg is
 	generic(
 		BigISet		: boolean;
-		TriState	: boolean := true
+		TriState	: boolean := false
 	);
 	port (
 		Clk			: in std_logic;
@@ -119,46 +120,53 @@ begin
 		Status_D(4) <= ASR(15) xor Carry_v xor Carry15_v;	-- S
 	end generate;
 
-	gNoTri : if not TriState generate
-		Rd_Data <= std_logic_vector(W_i(7 downto 0)) when Rd_Addr_r = "11000" and BigISet else
-				std_logic_vector(W_i(15 downto 8)) when Rd_Addr_r = "11001" and BigISet else
-				std_logic_vector(X_i(7 downto 0)) when Rd_Addr_r = "11010" and BigISet else
-				std_logic_vector(X_i(15 downto 8)) when Rd_Addr_r = "11011" and BigISet else
-				std_logic_vector(Y_i(7 downto 0)) when Rd_Addr_r = "11100" and BigISet else
-				std_logic_vector(Y_i(15 downto 8)) when Rd_Addr_r = "11101" and BigISet else
-				std_logic_vector(Z_i(7 downto 0)) when Rd_Addr_r = "11110" and BigISet else
-				std_logic_vector(Z_i(15 downto 8)) when Rd_Addr_r = "11111" and BigISet else
-				Reg_D_i;
-	Rr_Data <= std_logic_vector(W_i(7 downto 0)) when Rr_Addr_r = "11000" and BigISet else
-				std_logic_vector(W_i(15 downto 8)) when Rr_Addr_r = "11001" and BigISet else
-				std_logic_vector(X_i(7 downto 0)) when Rr_Addr_r = "11010" and BigISet else
-				std_logic_vector(X_i(15 downto 8)) when Rr_Addr_r = "11011" and BigISet else
-				std_logic_vector(Y_i(7 downto 0)) when Rr_Addr_r = "11100" and BigISet else
-				std_logic_vector(Y_i(15 downto 8)) when Rr_Addr_r = "11101" and BigISet else
-				std_logic_vector(Z_i(7 downto 0)) when Rr_Addr_r = "11110" and BigISet else
-				std_logic_vector(Z_i(15 downto 8)) when Rr_Addr_r = "11111" and BigISet else
-				Reg_R_i;
+	gNoTri : if not TriState and BigISet generate
+		with Rd_Addr_r select
+			Rd_Data <= std_logic_vector(W_i(7 downto 0)) when "11000",
+				std_logic_vector(W_i(15 downto 8)) when "11001",
+				std_logic_vector(X_i(7 downto 0)) when "11010",
+				std_logic_vector(X_i(15 downto 8)) when "11011",
+				std_logic_vector(Y_i(7 downto 0)) when "11100",
+				std_logic_vector(Y_i(15 downto 8)) when "11101",
+				std_logic_vector(Z_i(7 downto 0)) when "11110",
+				std_logic_vector(Z_i(15 downto 8)) when "11111",
+				Reg_D_i when others;
+		with Rr_Addr_r select
+			Rr_Data <= std_logic_vector(W_i(7 downto 0)) when "11000",
+				std_logic_vector(W_i(15 downto 8)) when "11001",
+				std_logic_vector(X_i(7 downto 0)) when "11010",
+				std_logic_vector(X_i(15 downto 8)) when "11011",
+				std_logic_vector(Y_i(7 downto 0)) when "11100",
+				std_logic_vector(Y_i(15 downto 8)) when "11101",
+				std_logic_vector(Z_i(7 downto 0)) when "11110",
+				std_logic_vector(Z_i(15 downto 8)) when "11111",
+				Reg_R_i when others;
 	end generate;
 
-	gTri : if TriState generate
-		Rd_Data <= std_logic_vector(W_i(7 downto 0)) when Rd_Addr_r = "11000" and BigISet else "ZZZZZZZZ";
-		Rd_Data <= std_logic_vector(W_i(15 downto 8)) when Rd_Addr_r = "11001" and BigISet else "ZZZZZZZZ";
-		Rd_Data <= std_logic_vector(X_i(7 downto 0)) when Rd_Addr_r = "11010" and BigISet else "ZZZZZZZZ";
-		Rd_Data <= std_logic_vector(X_i(15 downto 8)) when Rd_Addr_r = "11011" and BigISet else "ZZZZZZZZ";
-		Rd_Data <= std_logic_vector(Y_i(7 downto 0)) when Rd_Addr_r = "11100" and BigISet else "ZZZZZZZZ";
-		Rd_Data <= std_logic_vector(Y_i(15 downto 8)) when Rd_Addr_r = "11101" and BigISet else "ZZZZZZZZ";
-		Rd_Data <= std_logic_vector(Z_i(7 downto 0)) when Rd_Addr_r = "11110" and BigISet else "ZZZZZZZZ";
-		Rd_Data <= std_logic_vector(Z_i(15 downto 8)) when Rd_Addr_r = "11111" and BigISet else "ZZZZZZZZ";
-		Rd_Data <= Reg_D_i when not BigISet or (Rd_Addr_r(4 downto 3) /= "11" and BigISet) else "ZZZZZZZZ";
-		Rr_Data <= std_logic_vector(W_i(7 downto 0)) when Rr_Addr_r = "11000" and BigISet else "ZZZZZZZZ";
-		Rr_Data <= std_logic_vector(W_i(15 downto 8)) when Rr_Addr_r = "11001" and BigISet else "ZZZZZZZZ";
-		Rr_Data <= std_logic_vector(X_i(7 downto 0)) when Rr_Addr_r = "11010" and BigISet else "ZZZZZZZZ";
-		Rr_Data <= std_logic_vector(X_i(15 downto 8)) when Rr_Addr_r = "11011" and BigISet else "ZZZZZZZZ";
-		Rr_Data <= std_logic_vector(Y_i(7 downto 0)) when Rr_Addr_r = "11100" and BigISet else "ZZZZZZZZ";
-		Rr_Data <= std_logic_vector(Y_i(15 downto 8)) when Rr_Addr_r = "11101" and BigISet else "ZZZZZZZZ";
-		Rr_Data <= std_logic_vector(Z_i(7 downto 0)) when Rr_Addr_r = "11110" and BigISet else "ZZZZZZZZ";
-		Rr_Data <= std_logic_vector(Z_i(15 downto 8)) when Rr_Addr_r = "11111" and BigISet else "ZZZZZZZZ";
-		Rr_Data <= Reg_R_i when not BigISet or (Rr_Addr_r(4 downto 3) /= "11" and BigISet) else "ZZZZZZZZ";
+	gTri : if TriState and BigISet generate
+		Rd_Data <= std_logic_vector(W_i(7 downto 0)) when Rd_Addr_r = "11000" else "ZZZZZZZZ";
+		Rd_Data <= std_logic_vector(W_i(15 downto 8)) when Rd_Addr_r = "11001" else "ZZZZZZZZ";
+		Rd_Data <= std_logic_vector(X_i(7 downto 0)) when Rd_Addr_r = "11010" else "ZZZZZZZZ";
+		Rd_Data <= std_logic_vector(X_i(15 downto 8)) when Rd_Addr_r = "11011" else "ZZZZZZZZ";
+		Rd_Data <= std_logic_vector(Y_i(7 downto 0)) when Rd_Addr_r = "11100" else "ZZZZZZZZ";
+		Rd_Data <= std_logic_vector(Y_i(15 downto 8)) when Rd_Addr_r = "11101" else "ZZZZZZZZ";
+		Rd_Data <= std_logic_vector(Z_i(7 downto 0)) when Rd_Addr_r = "11110" else "ZZZZZZZZ";
+		Rd_Data <= std_logic_vector(Z_i(15 downto 8)) when Rd_Addr_r = "11111" else "ZZZZZZZZ";
+		Rd_Data <= Reg_D_i when (Rd_Addr_r(4 downto 3) /= "11") else "ZZZZZZZZ";
+		Rr_Data <= std_logic_vector(W_i(7 downto 0)) when Rr_Addr_r = "11000" else "ZZZZZZZZ";
+		Rr_Data <= std_logic_vector(W_i(15 downto 8)) when Rr_Addr_r = "11001" else "ZZZZZZZZ";
+		Rr_Data <= std_logic_vector(X_i(7 downto 0)) when Rr_Addr_r = "11010" else "ZZZZZZZZ";
+		Rr_Data <= std_logic_vector(X_i(15 downto 8)) when Rr_Addr_r = "11011" else "ZZZZZZZZ";
+		Rr_Data <= std_logic_vector(Y_i(7 downto 0)) when Rr_Addr_r = "11100" else "ZZZZZZZZ";
+		Rr_Data <= std_logic_vector(Y_i(15 downto 8)) when Rr_Addr_r = "11101" else "ZZZZZZZZ";
+		Rr_Data <= std_logic_vector(Z_i(7 downto 0)) when Rr_Addr_r = "11110" else "ZZZZZZZZ";
+		Rr_Data <= std_logic_vector(Z_i(15 downto 8)) when Rr_Addr_r = "11111" else "ZZZZZZZZ";
+		Rr_Data <= Reg_R_i when (Rr_Addr_r(4 downto 3) /= "11") else "ZZZZZZZZ";
+	end generate;
+
+	gSmall : if not BigISet generate
+		Rd_Data <= Reg_D_i;
+		Rr_Data <= Reg_R_i;
 	end generate;
 
 	dpramd : AX_DPRAM

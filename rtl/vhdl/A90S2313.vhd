@@ -1,7 +1,7 @@
 --
 -- 90S2313 compatible microcontroller core
 --
--- Version : 0220b
+-- Version : 0221
 --
 -- Copyright (c) 2001-2002 Daniel Wallner (jesus@opencores.org)
 --
@@ -47,6 +47,7 @@
 --	0146	: First release
 --	0220	: Changed to synchronous ROM
 --	0220b	: Changed reset
+--	0221	: Changed to configurable buses
 
 --Registers:												Comments:
 --$3F SREG Status Register									Implemented in the AX8 core
@@ -88,7 +89,8 @@ use work.AX_Pack.all;
 
 entity A90S2313 is
 	generic(
-		SyncReset : boolean := true
+		SyncReset : boolean := true;
+		TriState : boolean := false
 	);
 	port(
 		Clk		: in std_logic;
@@ -123,6 +125,8 @@ architecture rtl of A90S2313 is
 	signal	Reset_s_n	: std_logic;
 	signal	ROM_Addr	: std_logic_vector(ROMAddressWidth - 1 downto 0);
 	signal	ROM_Data	: std_logic_vector(15 downto 0);
+	signal	SREG		: std_logic_vector(7 downto 0);
+	signal	SP			: std_logic_vector(15 downto 0);
 	signal	IO_Rd		: std_logic;
 	signal	IO_Wr		: std_logic;
 	signal	IO_Addr		: std_logic_vector(5 downto 0);
@@ -165,6 +169,26 @@ architecture rtl of A90S2313 is
 	signal	TOV1		: std_logic;
 	signal	Int_Trig	: std_logic_vector(15 downto 1);
 	signal	Int_Acc		: std_logic_vector(15 downto 1);
+	signal	TCCR0		: std_logic_vector(2 downto 0);
+	signal	TCNT0		: std_logic_vector(7 downto 0);
+	signal	COM			: std_logic_vector(1 downto 0);
+	signal	PWM			: std_logic_vector(1 downto 0);
+	signal	CRBH		: std_logic_vector(1 downto 0);
+	signal	CRBL		: std_logic_vector(3 downto 0);
+	signal	TCNT1		: std_logic_vector(15 downto 0);
+	signal	IC			: std_logic_vector(15 downto 0);
+	signal	OCR			: std_logic_vector(15 downto 0);
+	signal	Tmp			: std_logic_vector(15 downto 0);
+	signal	UDR			: std_logic_vector(7 downto 0);
+	signal	USR			: std_logic_vector(7 downto 3);
+	signal	UCR			: std_logic_vector(7 downto 0);
+	signal	UBRR		: std_logic_vector(7 downto 0);
+	signal	DirB		: std_logic_vector(7 downto 0);
+	signal	Port_InB	: std_logic_vector(7 downto 0);
+	signal	Port_OutB	: std_logic_vector(7 downto 0);
+	signal	DirD		: std_logic_vector(7 downto 0);
+	signal	Port_InD	: std_logic_vector(7 downto 0);
+	signal	Port_OutD	: std_logic_vector(7 downto 0);
 
 begin
 
@@ -190,10 +214,6 @@ begin
 	end generate;
 
 	-- Registers/Interrupts
-	IO_RData <= "00" & Sleep_En & "0" & ISC1 & ISC0 when IO_Rd = '1' and IO_Addr = "110101" else "ZZZZZZZZ"; -- $35 MCUCR
-	IO_RData <= Int_En & "000000" when IO_Rd = '1' and IO_Addr = "111011" else "ZZZZZZZZ"; -- $3B GIMSK
-	IO_RData <= TOIE1 & OCIE1 & "00" & TICIE1 & "0" & TOIE0 & "0" when IO_Rd = '1' and IO_Addr = "111001" else "ZZZZZZZZ"; -- $39 TIMSK
-	IO_RData <= TOV1 & OCF1 & "00" & ICF1 & "0" & TOV0 & "0" when IO_Rd = '1' and IO_Addr = "111000" else "ZZZZZZZZ"; -- $38 TIFR
 	process (Reset_s_n, Clk)
 	begin
 		if Reset_s_n = '0' then
@@ -310,11 +330,13 @@ begin
 			Sleep_En => Sleep_En,
 			Int_Trig => Int_Trig,
 			Int_Acc => Int_Acc,
+			SREG => SREG,
+			SP => SP,
 			IO_Rd => IO_Rd,
 			IO_Wr => IO_Wr,
 			IO_Addr => IO_Addr,
-			IO_WData => IO_WData,
-			IO_RData => IO_RData);
+			IO_RData => IO_RData,
+			IO_WData => IO_WData);
 
 	TCCR0_Sel <= '1' when IO_Addr = "110011" else '0';	-- $33 TCCR0
 	TCNT0_Sel <= '1' when IO_Addr = "110010" else '0';	-- $32 TCNT0
@@ -324,10 +346,10 @@ begin
 			T => T0,
 			TCCR_Sel => TCCR0_Sel,
 			TCNT_Sel => TCNT0_Sel,
-			Rd => IO_Rd,
 			Wr => IO_Wr,
 			Data_In => IO_WData,
-			Data_Out => IO_RData,
+			TCCR => TCCR0,
+			TCNT => TCNT0,
 			Int  => TC_Trig);
 
 	TCCR1_Sel <= '1' when IO_Addr(5 downto 1) = "10111" else '0';	-- $2E TCCR1
@@ -347,7 +369,14 @@ begin
 			Rd => IO_Rd,
 			Wr => IO_Wr,
 			Data_In => IO_WData,
-			Data_Out => IO_RData,
+			COM => COM,
+			PWM => PWM,
+			CRBH => CRBH,
+			CRBL => CRBL,
+			TCNT => TCNT1,
+			IC => IC,
+			OCR => OCR,
+			Tmp => Tmp,
 			OC => OC,
 			Int_TO => TO_Trig,
 			Int_OC => OC_Trig,
@@ -368,7 +397,10 @@ begin
 			Wr => IO_Wr,
 			TXC_Clr => Int_Acc(9),
 			Data_In => IO_WData,
-			Data_Out => IO_RData,
+			UDR => UDR,
+			USR => USR,
+			UCR => UCR,
+			UBRR => UBRR,
 			RXD => RXD,
 			TXD => TXD,
 			Int_RX => Int_Trig(7),
@@ -381,27 +413,92 @@ begin
 	PIND_Sel <= '1' when IO_Addr = "010000" else '0';
 	DDRD_Sel <= '1' when IO_Addr = "010001" else '0';
 	PORTD_Sel <= '1' when IO_Addr = "010010" else '0';
-	porta : AX_Port port map(
+	portb : AX_Port port map(
 			Clk => Clk,
 			Reset_n => Reset_s_n,
 			PORT_Sel => PORTB_Sel,
 			DDR_Sel => DDRB_Sel,
 			PIN_Sel => PINB_Sel,
-			Rd => IO_Rd,
 			Wr => IO_Wr,
 			Data_In => IO_WData,
-			Data_Out => IO_RData,
+			Dir => DirB,
+			Port_Input => Port_InB,
+			Port_Output => Port_OutB,
 			IOPort  => Port_B);
-	portb : AX_Port port map(
+	portd : AX_Port port map(
 			Clk => Clk,
 			Reset_n => Reset_s_n,
 			PORT_Sel => PORTD_Sel,
 			DDR_Sel => DDRD_Sel,
 			PIN_Sel => PIND_Sel,
-			Rd => IO_Rd,
 			Wr => IO_Wr,
 			Data_In => IO_WData,
-			Data_Out => IO_RData,
+			Dir => DirD,
+			Port_Input => Port_InD,
+			Port_Output => Port_OutD,
 			IOPort  => Port_D);
+
+	gNoTri : if not TriState generate
+		with IO_Addr select
+			IO_RData <= SREG when "111111",
+				SP(7 downto 0) when "111101",
+				SP(15 downto 8) when "111110",
+				"00" & Sleep_En & "0" & ISC1 & ISC0 when "110101",
+				Int_En & "000000" when "111011",
+				TOIE1 & OCIE1 & "00" & TICIE1 & "0" & TOIE0 & "0" when "111001",
+				TOV1 & OCF1 & "00" & ICF1 & "0" & TOV0 & "0" when "111000",
+				UDR when "001100",
+				USR & "000" when "001011",
+				UCR(7 downto 1) & "0" when "001010",
+				UBRR when "001001",
+				"00000" & TCCR0 when "110011",
+				TCNT0 when "110010",
+				COM & "0000" & PWM when "101111",
+				CRBH & "00" & CRBL when "101110",
+				TCNT1(7 downto 0) when "101100",
+				OCR(7 downto 0) when "101010",
+				IC(7 downto 0) when "101000",
+				Tmp(15 downto 8) when "101101" | "101001" | "101011",
+				Port_InB when "010101",
+				DirB when "010111",
+				Port_OutB when "011000",
+				Port_InD when "010000",
+				DirD when "010001",
+				Port_OutD when "010010",
+				"--------" when others;
+	end generate;
+	gTri : if TriState generate
+		IO_RData <= SREG when IO_Addr = "111111" else "ZZZZZZZZ";
+		IO_RData <= SP(7 downto 0) when IO_Addr = "111101" and BigIset else "ZZZZZZZZ";
+		IO_RData <= SP(15 downto 8) when IO_Addr = "111110" and BigIset else "ZZZZZZZZ";
+
+		IO_RData <= "00" & Sleep_En & "0" & ISC1 & ISC0 when IO_Addr = "110101" else "ZZZZZZZZ";
+		IO_RData <= Int_En & "000000" when IO_Rd = '1' and IO_Addr = "111011" else "ZZZZZZZZ";
+		IO_RData <= TOIE1 & OCIE1 & "00" & TICIE1 & "0" & TOIE0 & "0" when IO_Addr = "111001" else "ZZZZZZZZ";
+		IO_RData <= TOV1 & OCF1 & "00" & ICF1 & "0" & TOV0 & "0" when IO_Addr = "111000" else "ZZZZZZZZ";
+
+		IO_RData <= UDR when UDR_Sel = '1' else "ZZZZZZZZ";
+		IO_RData <= USR & "000" when USR_Sel = '1' else "ZZZZZZZZ";
+		IO_RData <= UCR(7 downto 1) & "0" when UCR_Sel = '1' else "ZZZZZZZZ";
+		IO_RData <= UBRR when UBRR_Sel = '1' else "ZZZZZZZZ";
+
+		IO_RData <= "00000" & TCCR0 when TCCR0_Sel = '1' else "ZZZZZZZZ";
+		IO_RData <= TCNT0 when TCNT0_Sel = '1' else "ZZZZZZZZ";
+
+		IO_RData <= COM & "0000" & PWM when TCCR1_Sel = '1' and IO_Addr(0) = '1' else "ZZZZZZZZ";
+		IO_RData <= CRBH & "00" & CRBL when TCCR1_Sel = '1' and IO_Addr(0) = '0' else "ZZZZZZZZ";
+		IO_RData <= TCNT1(7 downto 0) when TCNT1_Sel = '1' and IO_Addr(0) = '0' else "ZZZZZZZZ";
+		IO_RData <= OCR(7 downto 0) when OCR1_Sel = '1' and IO_Addr(0) = '0' else "ZZZZZZZZ";
+		IO_RData <= IC(7 downto 0) when ICR1_Sel = '1' and IO_Addr(0) = '0' else "ZZZZZZZZ";
+		IO_RData <= Tmp(15 downto 8) when (TCNT1_Sel = '1' or ICR1_Sel = '1' or OCR1_Sel = '1') and IO_Addr(0) = '1' else "ZZZZZZZZ";
+
+		IO_RData <= Port_InB when PINB_Sel = '1' else "ZZZZZZZZ";
+		IO_RData <= DirB when DDRB_Sel = '1' else "ZZZZZZZZ";
+		IO_RData <= Port_OutB when PORTB_Sel = '1' else "ZZZZZZZZ";
+
+		IO_RData <= Port_InD when PIND_Sel = '1' else "ZZZZZZZZ";
+		IO_RData <= DirD when DDRD_Sel = '1' else "ZZZZZZZZ";
+		IO_RData <= Port_OutD when PORTD_Sel = '1' else "ZZZZZZZZ";
+	end generate;
 
 end;

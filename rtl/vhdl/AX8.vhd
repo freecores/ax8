@@ -1,7 +1,7 @@
 --
 -- AT90Sxxxx compatible microcontroller core
 --
--- Version : 0221
+-- Version : 0221b
 --
 -- Copyright (c) 2001-2002 Daniel Wallner (jesus@opencores.org)
 --
@@ -48,6 +48,7 @@
 --	0146 : First release
 --	0220 : Added support for synchronous ROM
 --	0221 : Changed tristate buses
+--	0221b : Changed tristate buses
 
 library IEEE;
 use IEEE.std_logic_1164.all;
@@ -69,11 +70,13 @@ entity AX8 is
 		Sleep_En	: in std_logic;
 		Int_Trig	: in std_logic_vector(15 downto 1);
 		Int_Acc		: out std_logic_vector(15 downto 1);
+		SREG		: out std_logic_vector(7 downto 0);
+		SP			: out std_logic_vector(15 downto 0);
 		IO_Rd		: out std_logic;
 		IO_Wr		: out std_logic;
 		IO_Addr		: out std_logic_vector(5 downto 0);
+		IO_RData	: in std_logic_vector(7 downto 0);
 		IO_WData	: out std_logic_vector(7 downto 0);
-		IO_RData	: inout std_logic_vector(7 downto 0);
 		WDR			: out std_logic
 	);
 end AX8;
@@ -81,8 +84,8 @@ end AX8;
 architecture rtl of AX8 is
 
 	-- Registers
-	signal	SREG		: std_logic_vector(7 downto 0);
-	signal	SP			: unsigned(15 downto 0);
+	signal	SREG_i		: std_logic_vector(7 downto 0);
+	signal	SP_i		: unsigned(15 downto 0);
 	signal	NPC			: std_logic_vector(15 downto 0);
 	signal	PC			: std_logic_vector(15 downto 0);
 	signal	PCH			: std_logic_vector(7 downto 0);
@@ -205,7 +208,7 @@ begin
 			RAM_Wr_ID <= RAM_IW;
 		end if;
 	end process;
-	process (ROM_Data, Inst, DidPause, Pause, SP, X, Y, Z, Disp, IPush)
+	process (ROM_Data, Inst, DidPause, Pause, SP_i, X, Y, Z, Disp, IPush)
 	begin
 		Rd_Addr <= (others => '-');
 		Rr_Addr <= (others => '-');
@@ -279,7 +282,7 @@ begin
 						Dec_X <= '1';
 					end if;
 					if Inst(3 downto 0) = "1111" then	-- POP
-						Rr_Addr <= std_logic_vector(SP + 1);
+						Rr_Addr <= std_logic_vector(SP_i + 1);
 						Inc_SP <= '1';
 					end if;
 				end if;
@@ -316,7 +319,7 @@ begin
 						Dec_X <= '1';
 					end if;
 					if Inst(3 downto 0) = "1111" then	-- PUSH
-						Rd_Addr <= std_logic_vector(SP);
+						Rd_Addr <= std_logic_vector(SP_i);
 						Dec_SP <= '1';
 					end if;
 				end if;
@@ -333,12 +336,12 @@ begin
 		end if;
 		if ((DidPause /= "01" and (Inst = "1001010100001001" or Inst(15 downto 12) = "1101")) or IPush = '1') and BigISet then
 			-- RCALL, ICALL
-			Rd_Addr <= std_logic_vector(SP);
+			Rd_Addr <= std_logic_vector(SP_i);
 			Dec_SP <= '1';
 		end if;
 		if DidPause(0) = DidPause(1) and (Inst = "1001010100001000" or Inst = "1001010100011000") and BigISet then
 			-- RET, RETI
-			Rr_Addr <= std_logic_vector(SP + 1);
+			Rr_Addr <= std_logic_vector(SP_i + 1);
 			Inc_SP <= '1';
 		end if;
 		if DidPause = "00" and Inst = "1001010111001000" and BigISet then
@@ -388,12 +391,11 @@ begin
 	end process;
 
 	-- IO access
+	SP <= std_logic_vector(SP_i);
 	IO_Addr <= IO_Addr_i;
 	IO_Rd <= IO_Rd_i;
 	IO_Wr <= IO_Wr_i;
 	IO_WData <= IO_BMData when Inst(15 downto 11) = "10011" and Inst(8) = '0' else Rd_Data;
-	IO_RData <= std_logic_vector(SP(7 downto 0)) when IO_Addr_i = "111101" and BigIset else "ZZZZZZZZ";
-	IO_RData <= std_logic_vector(SP(15 downto 8)) when IO_Addr_i = "111110" and BigIset else "ZZZZZZZZ";
 	IO_BTest <= Bit_Pattern and IO_RData;
 	IOZ_Skip <= '1' when ((IO_BTest /= "00000000") and (Do_SBIS = '1')) or
 					((IO_BTest = "00000000") and (Do_SBIC = '1')) else '0';
@@ -401,7 +403,7 @@ begin
 	begin
 		if Reset_n = '0' then
 			if BigISet then
-				SP <= (others => '0');
+				SP_i <= (others => '0');
 			end if;
 			IO_Addr_i <= (others => '0');
 			IO_BMData <= (others => '0');
@@ -440,17 +442,17 @@ begin
 			end if;
 			if IO_Wr_i = '1' and BigISet then
 				if IO_Addr_i = "111101" then --$3D ($5D) SPL Stack Pointer Low
-					SP(7 downto 0) <= unsigned(Rd_Data);
+					SP_i(7 downto 0) <= unsigned(Rd_Data);
 				end if;
 				if IO_Addr_i = "111110" then --$3E ($5E) SPH Stack Pointer High
-					SP(15 downto 8) <= unsigned(Rd_Data);
+					SP_i(15 downto 8) <= unsigned(Rd_Data);
 				end if;
 			end if;
 			if Dec_SP = '1' and BigISet then
-				SP <= SP - 1;
+				SP_i <= SP_i - 1;
 			end if;
 			if Inc_SP = '1' and BigISet then
-				SP <= SP + 1;
+				SP_i <= SP_i + 1;
 			end if;
 		end if;
 	end process;
@@ -499,30 +501,30 @@ begin
 	end process;
 
 	-- Status register
-	IO_RData <= SREG when IO_Addr_i = "111111" else "ZZZZZZZZ";
+	SREG <= SREG_i;
 	process (Reset_n, Clk)
 	begin
 		if Reset_n = '0' then
-			SREG <= "00000000";
+			SREG_i <= "00000000";
 		elsif Clk'event and Clk = '1' then
 			if IO_Wr_i = '1' and IO_Addr_i = "111111" then --$3F ($5F) SREG Status Register
-				SREG <= Rd_Data;
+				SREG_i <= Rd_Data;
 			end if;
 			if Inst(15 downto 8) = "10010100" and Inst(3 downto 0) = "1000" then
-				SREG(to_integer(unsigned(Inst(6 downto 4)))) <= not Inst(7);	-- BSET, BCLR
+				SREG_i(to_integer(unsigned(Inst(6 downto 4)))) <= not Inst(7);	-- BSET, BCLR
 			end if;
-			if Inst = "1001010100011000" then SREG(7) <= '1'; end if;
+			if Inst = "1001010100011000" then SREG_i(7) <= '1'; end if;
 			if IPush = '1' then
-				SREG(7) <= '0';
+				SREG_i(7) <= '0';
 			end if;
-			if Status_Wr(6) = '1' then SREG(6) <= Status_D(6); end if;
-			if Status_Wr(5) = '1' then SREG(5) <= Status_D(5); end if;
-			if Status_Wr(4) = '1' then SREG(4) <= Status_D(4); end if;
-			if Status_Wr(3) = '1' then SREG(3) <= Status_D(3); end if;
-			if Status_Wr(2) = '1' then SREG(2) <= Status_D(2); end if;
-			if Status_Wr(1) = '1' then SREG(1) <= Status_D(1); end if;
-			if Status_Wr(0) = '1' then SREG(0) <= Status_D(0); end if;
-			if Status_D_Wr = '1' and BigISet then SREG(4 downto 0) <= Status_D_R; end if;
+			if Status_Wr(6) = '1' then SREG_i(6) <= Status_D(6); end if;
+			if Status_Wr(5) = '1' then SREG_i(5) <= Status_D(5); end if;
+			if Status_Wr(4) = '1' then SREG_i(4) <= Status_D(4); end if;
+			if Status_Wr(3) = '1' then SREG_i(3) <= Status_D(3); end if;
+			if Status_Wr(2) = '1' then SREG_i(2) <= Status_D(2); end if;
+			if Status_Wr(1) = '1' then SREG_i(1) <= Status_D(1); end if;
+			if Status_Wr(0) = '1' then SREG_i(0) <= Status_D(0); end if;
+			if Status_D_Wr = '1' and BigISet then SREG_i(4 downto 0) <= Status_D_R; end if;
 		end if;
 	end process;
 
@@ -596,8 +598,8 @@ begin
 	PCPause <= '1' when (IndSkip = '0' and ((Pause /= "00" and DidPause = "00") or DidPause(1) = '1')) or Sleep = '1' else '0';
 	RJmp <= '1' when Inst(15 downto 12) = "1100" or
 			(Inst(15 downto 12) = "1101" and DidPause = "10") or
-			(CBranch = '1' and Inst(10) = '0' and ((SREG and Bit_Pattern) /= "00000000")) or
-			(CBranch = '1' and Inst(10) = '1' and ((SREG and Bit_Pattern) = "00000000")) else '0';
+			(CBranch = '1' and Inst(10) = '0' and ((SREG_i and Bit_Pattern) /= "00000000")) or
+			(CBranch = '1' and Inst(10) = '1' and ((SREG_i and Bit_Pattern) = "00000000")) else '0';
 	HRet <= '1' when DidPause = "11" and BigIset and
 			(Inst = "1001010100001000" or Inst = "1001010100011000") else '0';
 	LRet <= '1' when DidPause = "10" and BigIset and
@@ -710,7 +712,7 @@ begin
 			A => Rd_Data,
 			B => Op_Mux,
 			Q => Q,
-			SREG => SREG,
+			SREG => SREG_i,
 			PassB => PassB,
 			Skip => Inst_Skip,
 			Do_Other => Do_Other,
@@ -736,7 +738,7 @@ begin
 			if Inst = "1001010110001000" and Sleep_En = '1' then
 				Sleep <= '1';
 			end if;
-			if Int_Trig /= "000000000000000" and SREG(7) = '1' then
+			if Int_Trig /= "000000000000000" and SREG_i(7) = '1' then
 				Sleep <= '0';
 				IPending <= '1';
 			end if;

@@ -1,7 +1,7 @@
 --
 -- 90S1200 compatible microcontroller core
 --
--- Version : 0220b
+-- Version : 0221
 --
 -- Copyright (c) 2001-2002 Daniel Wallner (jesus@opencores.org)
 --
@@ -47,6 +47,7 @@
 --	0146	: First release
 --	0220	: Changed to synchronous ROM
 --	0220b	: Changed reset
+--	0221	: Changed to configurable buses
 
 --Registers:												Comments:
 --$3F SREG Status Register									Implemented in the AX8 core
@@ -74,7 +75,8 @@ use work.AX_Pack.all;
 
 entity A90S1200 is
 	generic(
-		SyncReset : boolean := true
+		SyncReset : boolean := true;
+		TriState : boolean := false
 	);
 	port(
 		Clk		: in std_logic;
@@ -103,6 +105,7 @@ architecture rtl of A90S1200 is
 	signal	Reset_s_n	: std_logic;
 	signal	ROM_Addr	: std_logic_vector(ROMAddressWidth - 1 downto 0);
 	signal	ROM_Data	: std_logic_vector(15 downto 0);
+	signal	SREG		: std_logic_vector(7 downto 0);
 	signal	IO_Rd		: std_logic;
 	signal	IO_Wr		: std_logic;
 	signal	IO_Addr		: std_logic_vector(5 downto 0);
@@ -126,6 +129,14 @@ architecture rtl of A90S1200 is
 	signal	TOV0		: std_logic;
 	signal	Int_Trig	: std_logic_vector(15 downto 1);
 	signal	Int_Acc		: std_logic_vector(15 downto 1);
+	signal	TCCR		: std_logic_vector(2 downto 0);
+	signal	TCNT		: std_logic_vector(7 downto 0);
+	signal	DirB		: std_logic_vector(7 downto 0);
+	signal	Port_InB	: std_logic_vector(7 downto 0);
+	signal	Port_OutB	: std_logic_vector(7 downto 0);
+	signal	DirD		: std_logic_vector(7 downto 0);
+	signal	Port_InD	: std_logic_vector(7 downto 0);
+	signal	Port_OutD	: std_logic_vector(7 downto 0);
 
 begin
 
@@ -151,10 +162,6 @@ begin
 	end generate;
 
 	-- Registers/Interrupts
-	IO_RData <= "00" & Sleep_En & "000" & ISC0 when IO_Rd = '1' and IO_Addr = "110101" else "ZZZZZZZZ";	-- $35 MCUCR
-	IO_RData <= "0" & Int0_En & "000000" when IO_Rd = '1' and IO_Addr = "111011" else "ZZZZZZZZ";		-- $3B GIMSK
-	IO_RData <= "000000" & TOIE0 & "0" when IO_Rd = '1' and IO_Addr = "111001" else "ZZZZZZZZ";		-- $39 TIMSK
-	IO_RData <= "000000" & TOV0 & "0" when IO_Rd = '1' and IO_Addr = "111000" else "ZZZZZZZZ";		-- $38 TIFR
 	process (Reset_s_n, Clk)
 	begin
 		if Reset_s_n = '0' then
@@ -220,11 +227,12 @@ begin
 			Sleep_En => Sleep_En,
 			Int_Trig => Int_Trig,
 			Int_Acc => Int_Acc,
+			SREG => SREG,
 			IO_Rd => IO_Rd,
 			IO_Wr => IO_Wr,
 			IO_Addr => IO_Addr,
-			IO_WData => IO_WData,
-			IO_RData => IO_RData);
+			IO_RData => IO_RData,
+			IO_WData => IO_WData);
 
 	TCCR_Sel <= '1' when IO_Addr = "110011" else '0';	-- $33 TCCR0
 	TCNT_Sel <= '1' when IO_Addr = "110010" else '0';	-- $32 TCNT0
@@ -234,10 +242,10 @@ begin
 			T => T0,
 			TCCR_Sel => TCCR_Sel,
 			TCNT_Sel => TCNT_Sel,
-			Rd => IO_Rd,
 			Wr => IO_Wr,
 			Data_In => IO_WData,
-			Data_Out => IO_RData,
+			TCCR => TCCR,
+			TCNT => TCNT,
 			Int  => TC_Trig);
 
 	PINB_Sel <= '1' when IO_Addr = "010101" else '0';
@@ -246,27 +254,66 @@ begin
 	PIND_Sel <= '1' when IO_Addr = "010000" else '0';
 	DDRD_Sel <= '1' when IO_Addr = "010001" else '0';
 	PORTD_Sel <= '1' when IO_Addr = "010010" else '0';
-	porta : AX_Port port map(
+	portb : AX_Port port map(
 			Clk => Clk,
 			Reset_n => Reset_s_n,
 			PORT_Sel => PORTB_Sel,
 			DDR_Sel => DDRB_Sel,
 			PIN_Sel => PINB_Sel,
-			Rd => IO_Rd,
 			Wr => IO_Wr,
 			Data_In => IO_WData,
-			Data_Out => IO_RData,
+			Dir => DirB,
+			Port_Input => Port_InB,
+			Port_Output => Port_OutB,
 			IOPort  => Port_B);
-	portb : AX_Port port map(
+	portd : AX_Port port map(
 			Clk => Clk,
 			Reset_n => Reset_s_n,
 			PORT_Sel => PORTD_Sel,
 			DDR_Sel => DDRD_Sel,
 			PIN_Sel => PIND_Sel,
-			Rd => IO_Rd,
 			Wr => IO_Wr,
 			Data_In => IO_WData,
-			Data_Out => IO_RData,
+			Dir => DirD,
+			Port_Input => Port_InD,
+			Port_Output => Port_OutD,
 			IOPort  => Port_D);
+
+	gNoTri : if not TriState generate
+		with IO_Addr select
+			IO_RData <= SREG when "111111",
+				"00" & Sleep_En & "000" & ISC0 when "110101",
+				"0" & Int0_En & "000000" when "111011",
+				"000000" & TOIE0 & "0" when "111001",
+				"000000" & TOV0 & "0" when "111000",
+				"00000" & TCCR when "110011",
+				TCNT when "110010",
+				Port_InB when "010101",
+				DirB when "010111",
+				Port_OutB when "011000",
+				Port_InD when "010000",
+				DirD when "010001",
+				Port_OutD when "010010",
+				"--------" when others;
+	end generate;
+	gTri : if TriState generate
+		IO_RData <= SREG when IO_Addr = "111111" else "ZZZZZZZZ";
+
+		IO_RData <= "00" & Sleep_En & "000" & ISC0 when IO_Addr = "110101" else "ZZZZZZZZ";
+		IO_RData <= "0" & Int0_En & "000000" when IO_Addr = "111011" else "ZZZZZZZZ";
+		IO_RData <= "000000" & TOIE0 & "0" when IO_Addr = "111001" else "ZZZZZZZZ";
+		IO_RData <= "000000" & TOV0 & "0" when IO_Addr = "111000" else "ZZZZZZZZ";
+
+		IO_RData <= "00000" & TCCR when TCCR_Sel = '1' else "ZZZZZZZZ";
+		IO_RData <= TCNT when TCNT_Sel = '1' else "ZZZZZZZZ";
+
+		IO_RData <= Port_InB when PINB_Sel = '1' else "ZZZZZZZZ";
+		IO_RData <= DirB when DDRB_Sel = '1' else "ZZZZZZZZ";
+		IO_RData <= Port_OutB when PORTB_Sel = '1' else "ZZZZZZZZ";
+
+		IO_RData <= Port_InD when PIND_Sel = '1' else "ZZZZZZZZ";
+		IO_RData <= DirD when DDRD_Sel = '1' else "ZZZZZZZZ";
+		IO_RData <= Port_OutD when PORTD_Sel = '1' else "ZZZZZZZZ";
+	end generate;
 
 end;

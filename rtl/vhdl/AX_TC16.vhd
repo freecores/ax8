@@ -1,7 +1,7 @@
 --
 -- AT90Sxxxx compatible microcontroller core
 --
--- Version : 0146
+-- Version : 0221
 --
 -- Copyright (c) 2001-2002 Daniel Wallner (jesus@opencores.org)
 --
@@ -45,6 +45,8 @@
 --
 -- File history :
 --
+--	0146	: First release
+--	0221	: Removed tristate
 
 library IEEE;
 use IEEE.std_logic_1164.all;
@@ -64,7 +66,14 @@ entity AX_TC16 is
 		Rd			: in std_logic;
 		Wr			: in std_logic;
 		Data_In		: in std_logic_vector(7 downto 0);
-		Data_Out	: out std_logic_vector(7 downto 0);
+		COM			: out std_logic_vector(1 downto 0);
+		PWM			: out std_logic_vector(1 downto 0);
+		CRBH		: out std_logic_vector(1 downto 0);
+		CRBL		: out std_logic_vector(3 downto 0);
+		TCNT		: out std_logic_vector(15 downto 0);
+		IC			: out std_logic_vector(15 downto 0);
+		OCR			: out std_logic_vector(15 downto 0);
+		Tmp			: out std_logic_vector(15 downto 0);
 		OC			: out std_logic;
 		Int_TO		: out std_logic;
 		Int_OC		: out std_logic;
@@ -74,14 +83,14 @@ end AX_TC16;
 
 architecture rtl of AX_TC16 is
 
-	signal	COM			: std_logic_vector(1 downto 0);
-	signal	PWM			: std_logic_vector(1 downto 0);
-	signal	CRBH		: std_logic_vector(1 downto 0); -- ICNC, ICES
-	signal	CRBL		: std_logic_vector(3 downto 0); -- CTC, CS
-	signal	TCNT		: std_logic_vector(15 downto 0);
-	signal	IC			: std_logic_vector(15 downto 0);
-	signal	OCR			: std_logic_vector(15 downto 0);
-	signal	TEMP		: std_logic_vector(15 downto 0);
+	signal	COM_i		: std_logic_vector(1 downto 0);
+	signal	PWM_i		: std_logic_vector(1 downto 0);
+	signal	CRBH_i		: std_logic_vector(1 downto 0); -- ICNC, ICES
+	signal	CRBL_i		: std_logic_vector(3 downto 0); -- CTC, CS
+	signal	TCNT_i		: std_logic_vector(15 downto 0);
+	signal	IC_i		: std_logic_vector(15 downto 0);
+	signal	OCR_i		: std_logic_vector(15 downto 0);
+	signal	Tmp_i		: std_logic_vector(15 downto 0);
 
 	signal	OC_i		: std_logic;
 	signal	IC_Trig		: std_logic;
@@ -91,30 +100,32 @@ architecture rtl of AX_TC16 is
 
 begin
 
+	COM <= COM_i;
+	PWM <= PWM_i;
+	CRBH <= CRBH_i;
+	CRBL <= CRBL_i;
+	TCNT <= TCNT_i;
+	IC <= IC_i;
+	OCR(7 downto 0) <= OCR_i(7 downto 0) when PWM_Load = '0' else Tmp_i(7 downto 0);
+	OCR(15 downto 8) <= OCR_i(15 downto 8);
+	Tmp <= Tmp_i;
 	OC <= OC_i;
 	Int_IC <= IC_Trig;
 
 	-- Registers and counter
-	Data_Out <= COM & "0000" & PWM when Rd = '1' and TCCR_Sel = '1' and A0 = '1' else "ZZZZZZZZ";
-	Data_Out <= CRBH & "00" & CRBL when Rd = '1' and TCCR_Sel = '1' and A0 = '0' else "ZZZZZZZZ";
-	Data_Out <= TCNT(7 downto 0) when Rd = '1' and TCNT_Sel = '1' and A0 = '0' else "ZZZZZZZZ";
-	Data_Out <= OCR(7 downto 0) when Rd = '1' and OCR_Sel = '1' and A0 = '0' and PWM_Load = '0' else "ZZZZZZZZ";
-	Data_Out <= Temp(7 downto 0) when Rd = '1' and OCR_Sel = '1' and A0 = '0' and PWM_Load = '1' else "ZZZZZZZZ";
-	Data_Out <= IC(7 downto 0) when Rd = '1' and ICR_Sel = '1' and A0 = '0' else "ZZZZZZZZ";
-	Data_Out <= TEMP(15 downto 8) when Rd = '1' and (TCNT_Sel = '1' or ICR_Sel = '1' or OCR_Sel = '1') and A0 = '1' else "ZZZZZZZZ";
 	process (Reset_n, Clk)
 		variable PWM_T : std_logic;
 		variable PWM_B : std_logic;
 	begin
 		if Reset_n = '0' then
-			COM <= "00";
-			PWM <= "00";
-			CRBH <= "00";
-			CRBL <= "0000";
-			TCNT <= (others => '0');
-			OCR <= (others => '0');
-			IC <= (others => '0');
-			Temp <= (others => '0');
+			COM_i <= "00";
+			PWM_i <= "00";
+			CRBH_i <= "00";
+			CRBL_i <= "0000";
+			TCNT_i <= (others => '0');
+			OCR_i <= (others => '0');
+			IC_i <= (others => '0');
+			Tmp_i <= (others => '0');
 			OC_i <= '0';
 			Int_TO <= '0';
 			Int_OC <= '0';
@@ -124,78 +135,78 @@ begin
 			Int_TO <= '0';
 			Int_OC <= '0';
 			if Tick = '1' then
-				TCNT <= std_logic_vector(unsigned(TCNT) + 1);
-				if TCNT = "1111111111111111" then
+				TCNT_i <= std_logic_vector(unsigned(TCNT_i) + 1);
+				if TCNT_i = "1111111111111111" then
 					Int_TO <= '1';
 				end if;
-				if TCNT = OCR then
-					if PWM = "00" then
+				if TCNT_i = OCR_i then
+					if PWM_i = "00" then
 						Int_OC <= '1';
-						if CRBL(3) = '1' then
-							TCNT <= (others => '0');
+						if CRBL_i(3) = '1' then
+							TCNT_i <= (others => '0');
 						end if;
-						if COM = "01" then
+						if COM_i = "01" then
 							OC_i <= not OC_i;
 						end if;
-						if COM = "10" then
+						if COM_i = "10" then
 							OC_i <= '0';
 						end if;
-						if COM = "11" then
+						if COM_i = "11" then
 							OC_i <= '1';
 						end if;
 					end if;
 				end if;
-				if PWM /= "00" then
+				if PWM_i /= "00" then
 					PWM_T := '0';
 					PWM_B := '0';
 					if PWM_Dn = '0' then
-						TCNT <= std_logic_vector(unsigned(TCNT) + 1);
+						TCNT_i <= std_logic_vector(unsigned(TCNT_i) + 1);
 					else
-						TCNT <= std_logic_vector(unsigned(TCNT) - 1);
+						TCNT_i <= std_logic_vector(unsigned(TCNT_i) - 1);
 					end if;
-					if PWM = "01" and TCNT(7 downto 0) = OCR(7 downto 0) then
-						OC_i <= COM(0) xor PWM_Dn;
+					if PWM_i = "01" and TCNT_i(7 downto 0) = OCR_i(7 downto 0) then
+						OC_i <= COM_i(0) xor PWM_Dn;
 					end if;
-					if PWM = "10" and TCNT(8 downto 0) = OCR(8 downto 0) then
-						OC_i <= COM(0) xor PWM_Dn;
+					if PWM_i = "10" and TCNT_i(8 downto 0) = OCR_i(8 downto 0) then
+						OC_i <= COM_i(0) xor PWM_Dn;
 					end if;
-					if PWM = "11" and TCNT(9 downto 0) = OCR(9 downto 0) then
-						OC_i <= COM(0) xor PWM_Dn;
+					if PWM_i = "11" and TCNT_i(9 downto 0) = OCR_i(9 downto 0) then
+						OC_i <= COM_i(0) xor PWM_Dn;
 					end if;
-					if PWM = "01" then
-						if TCNT(7 downto 0) = "11111110" and PWM_Dn = '0' then
+					if PWM_i = "01" then
+						if TCNT_i(7 downto 0) = "11111110" and PWM_Dn = '0' then
 							PWM_T := '1';
 						end if;
-						if TCNT(7 downto 0) = "00000001" and PWM_Dn = '1' then
+						if TCNT_i(7 downto 0) = "00000001" and PWM_Dn = '1' then
 							PWM_B := '1';
 						end if;
 					end if;
-					if PWM = "10" then
-						if TCNT(8 downto 0) = "111111110" and PWM_Dn = '0' then
+					if PWM_i = "10" then
+						if TCNT_i(8 downto 0) = "111111110" and PWM_Dn = '0' then
 							PWM_T := '1';
 						end if;
-						if TCNT(8 downto 0) = "000000001" and PWM_Dn = '1' then
+						if TCNT_i(8 downto 0) = "000000001" and PWM_Dn = '1' then
 							PWM_B := '1';
 						end if;
 					end if;
-					if PWM = "11" then
-						if TCNT(9 downto 0) = "1111111110" and PWM_Dn = '0' then
+					if PWM_i = "11" then
+						if TCNT_i(9 downto 0) = "1111111110" and PWM_Dn = '0' then
 							PWM_T := '1';
 						end if;
-						if TCNT(9 downto 0) = "0000000001" and PWM_Dn = '1' then
+						if TCNT_i(9 downto 0) = "0000000001" and PWM_Dn = '1' then
 							PWM_B := '1';
 						end if;
 					end if;
 					if PWM_T = '1' then
-						if PWM_Load = '1' and COM(0) = '0' then
-							OCR <= Temp;
+						if PWM_Load = '1' and COM_i(0) = '0' then
+							OCR_i <= Tmp_i;
 							PWM_Load <= '0';
 						end if;
 						PWM_Dn <= '1';
 					end if;
 					if PWM_B = '1' then
-						if PWM_Load = '1' and COM(0) = '1' then
-							OCR <= Temp;
+						if PWM_Load = '1' and COM_i(0) = '1' then
+							OCR_i <= Tmp_i;
 							PWM_Load <= '0';
 						end if;
 						PWM_Dn <= '0';
@@ -204,36 +215,36 @@ begin
 				end if;
 			end if;
 			if IC_Trig = '1' then
-				TCNT <= IC;
+				TCNT_i <= IC_i;
 			end if;
 			-- Register read with temp
 			if Rd = '1' and TCNT_Sel = '1' and A0 = '0' then
-				Temp(15 downto 8) <= TCNT(15 downto 8);
+				Tmp_i(15 downto 8) <= TCNT_i(15 downto 8);
 			end if;
 			if Rd = '1' and OCR_Sel = '1' and A0 = '0' then
-				Temp(15 downto 8) <= OCR(15 downto 8);
+				Tmp_i(15 downto 8) <= OCR_i(15 downto 8);
 			end if;
 			if Rd = '1' and ICR_Sel = '1' and A0 = '0' then
-				Temp(15 downto 8) <= IC(15 downto 8);
+				Tmp_i(15 downto 8) <= IC_i(15 downto 8);
 			end if;
 			-- Register write
 			if TCNT_Sel = '1' and Wr = '1' then
 				if A0 = '1' then
-					Temp(15 downto 8) <= Data_In;
+					Tmp_i(15 downto 8) <= Data_In;
 				else
-					TCNT(7 downto 0) <= Data_In;
-					TCNT(15 downto 8) <= Temp(15 downto 8);
+					TCNT_i(7 downto 0) <= Data_In;
+					TCNT_i(15 downto 8) <= Tmp_i(15 downto 8);
 				end if;
 				Int_TO <= '0';
 			end if;
 			if OCR_Sel = '1' and Wr = '1' then
 				if A0 = '1' then
-					Temp(15 downto 8) <= Data_In;
+					Tmp_i(15 downto 8) <= Data_In;
 				else
-					Temp(7 downto 0) <= Data_In;
-					if PWM = "00" then
-						OCR(7 downto 0) <= Data_In;
-						OCR(15 downto 8) <= Temp(15 downto 8);
+					Tmp_i(7 downto 0) <= Data_In;
+					if PWM_i = "00" then
+						OCR_i(7 downto 0) <= Data_In;
+						OCR_i(15 downto 8) <= Tmp_i(15 downto 8);
 					else
 						PWM_Load <= '1';
 					end if;
@@ -241,19 +252,19 @@ begin
 			end if;
 			if ICR_Sel = '1' and Wr = '1' then
 				if A0 = '1' then
-					Temp(15 downto 8) <= Data_In;
+					Tmp_i(15 downto 8) <= Data_In;
 				else
-					IC(7 downto 0) <= Data_In;
-					IC(15 downto 8) <= Temp(15 downto 8);
+					IC_i(7 downto 0) <= Data_In;
+					IC_i(15 downto 8) <= Tmp_i(15 downto 8);
 				end if;
 			end if;
 			if TCCR_Sel = '1' and Wr = '1' and A0 = '1' then
-				COM <= Data_In(7 downto 6);
-				PWM <= Data_In(1 downto 0);
+				COM_i <= Data_In(7 downto 6);
+				PWM_i <= Data_In(1 downto 0);
 			end if;
 			if TCCR_Sel = '1' and Wr = '1' and A0 = '0' then
-				CRBH <= Data_In(7 downto 6);
-				CRBL <= Data_In(3 downto 0);
+				CRBH_i <= Data_In(7 downto 6);
+				CRBL_i <= Data_In(3 downto 0);
 			end if;
 		end if;
 	end process;
@@ -264,18 +275,18 @@ begin
 	begin
 		if Clk'event and Clk = '1' then
 			IC_Trig <= '0';
-			if CRBH(1) = '1' then
-				if Samples = "10000" and CRBH(0) = '0' then
+			if CRBH_i(1) = '1' then
+				if Samples = "10000" and CRBH_i(0) = '0' then
 					IC_Trig <= '1';
 				end if;
-				if Samples = "01111" and CRBH(0) = '1' then
+				if Samples = "01111" and CRBH_i(0) = '1' then
 					IC_Trig <= '1';
 				end if;
 			else
-				if Samples(1 downto 0) = "10" and CRBH(0) = '0' then
+				if Samples(1 downto 0) = "10" and CRBH_i(0) = '0' then
 					IC_Trig <= '1';
 				end if;
-				if Samples(1 downto 0) = "01" and CRBH(0) = '1' then
+				if Samples(1 downto 0) = "01" and CRBH_i(0) = '1' then
 					IC_Trig <= '1';
 				end if;
 			end if;
@@ -295,7 +306,7 @@ begin
 			T_r := "00";
 		elsif Clk'event and Clk='1' then
 			Tick <= '0';
-			case CRBL(2 downto 0) is
+			case CRBL_i(2 downto 0) is
 			when "000" =>
 			when "001" =>
 				Tick <= '1';
