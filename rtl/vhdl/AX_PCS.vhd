@@ -1,7 +1,7 @@
 --
 -- AT90Sxxxx compatible microcontroller core
 --
--- Version : 0220
+-- Version : 0220b
 --
 -- Copyright (c) 2001-2002 Daniel Wallner (jesus@opencores.org)
 --
@@ -92,7 +92,7 @@ begin
 	PC <= std_logic_vector(PC_i);
 	IPush <= IPush_i;
 
-	process (Reset_n, PC_i, Pause, IPending, IPush_i, Push, Pop, Stack, Data_In, Offs_In, CInt, HRet, LRet, RJmp, ZJmp, Z)
+	process (PC_i, Pause, IPending, IPush_i, Push, Pop, Stack, Data_In, Offs_In, CInt, HRet, LRet, RJmp, ZJmp, Z)
 	begin
 		NPC_i <= PC_i;
 		if Pause = '0' then
@@ -119,15 +119,12 @@ begin
 		if RJmp = '1' then
 			NPC_i <= PC_i + unsigned(resize(signed(Offs_In), 16));
 		end if;
-		if Reset_n = '0' then
-			NPC_i <= (others => '0');
-		end if;
 	end process;
 
 	process (Reset_n, Clk)
 	begin
 		if Reset_n = '0' then
-			PC_i <= (others => '0');
+			PC_i <= (others => '1');
 			IPush_i <= '0';
 			if HW_Stack then
 				Stack <= (others => (others => '0'));
