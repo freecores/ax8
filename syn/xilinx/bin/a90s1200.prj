@@ -1,4 +1,5 @@
 ../../../rtl/vhdl/AX_Pack.vhd
+../../../rtl/vhdl/AX_DPRAM.vhd
 ../../../rtl/vhdl/AX_Reg.vhd
 ../../../rtl/vhdl/AX_ALU.vhd
 ../../../rtl/vhdl/AX_PCS.vhd

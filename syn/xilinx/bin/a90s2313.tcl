@@ -20,6 +20,7 @@ load_library xis2
 
 read -technology xis2 {
 ../../../rtl/vhdl/AX_Pack.vhd
+../../../rtl/vhdl/AX_DPRAM.vhd
 ../../../rtl/vhdl/AX_Reg.vhd
 ../../../rtl/vhdl/AX_ALU.vhd
 ../../../rtl/vhdl/AX_RAM.vhd
@@ -43,4 +44,4 @@ report_area
 
 report_delay
 
-write a90s2313.edf
+write a90s2313_leo.edf

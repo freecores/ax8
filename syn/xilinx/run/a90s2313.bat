@@ -11,16 +11,18 @@ cd ..\out
 
 if "%1" == "" goto xst
 
-copy ..\bin\%name%.pin %name%.ucf
+set name=a90s2313_leo
 
-ngdbuild -p %target% %1
+copy ..\bin\a90s2313.pin %name%.ucf
+
+ngdbuild -p %target% %1 %name%.ngd
 
 goto builddone
 
 :xst
 
 xrom ROM2313 10 16 > ..\src\ROM2313_Sine.vhd
-hex2rom ..\..\..\sw\sine.a90 rom2313 10b16u > rom2313_sine.ini
+hex2rom ..\..\..\sw\sine2313.hex rom2313 10l16u > rom2313_sine.ini
 copy ..\out\rom2313_sine.ini + ..\bin\%name%.pin %name%.ucf
 
 xst -ifn ../bin/%name%.scr -ofn ../log/%name%.srp
@@ -30,10 +32,10 @@ ngdbuild -p %target% %name%.ngc
 
 move %name%.bld ..\log
 
-map -p %target% -cm speed -c 100 -tx on -o %name%_map %name%
-move %name%_map.mrp ..\log
+map -p %target% -cm speed -c 100 -pr b -timing -tx on -o %name%_map %name%
+move %name%_map.mrp ..\log\%name%.mrp
 
-par -ol 2 -xe 0 -t 1 -c 0 %name%_map -w %name%
+par -ol 3 -t 1 -c 0 %name%_map -w %name%
 move %name%.par ..\log
 
 trce %name%.ncd -o ../log/%name%.twr %name%_map.pcf
