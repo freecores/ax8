@@ -156,7 +156,7 @@ begin
 			if ROM_Data(15 downto 10) = "001001" then
 				-- EOR
 				Do_XOR <= '1';
-			end if
+			end if;
 			if ROM_Data(15 downto 10) = "001010" or ROM_Data(15 downto 12) = "0110" then
 				-- OR, ORI
 				Do_OR <= '1';
