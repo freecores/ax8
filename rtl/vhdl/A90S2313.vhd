@@ -1,7 +1,7 @@
 --
 -- 90S2313 compatible microcontroller core
 --
--- Version : 0220
+-- Version : 0220b
 --
 -- Copyright (c) 2001-2002 Daniel Wallner (jesus@opencores.org)
 --
@@ -84,6 +84,9 @@ use IEEE.std_logic_1164.all;
 use work.AX_Pack.all;
 
 entity A90S2313 is
+	generic(
+		SyncReset : boolean := true
+	);
 	port(
 		Clk		: in std_logic;
 		Reset_n	: in std_logic;
@@ -164,22 +167,33 @@ begin
 
 	-- Synchronise reset
 	process (Reset_n, Clk)
+		variable Reset_v : std_logic;
 	begin
 		if Reset_n = '0' then
-			Reset_s_n <= '0';
+			if SyncReset then
+				Reset_s_n <= '0';
+				Reset_v := '0';
+			end if;
 		elsif Clk'event and Clk = '1' then
-			Reset_s_n <= '1';
+			if SyncReset then
+				Reset_s_n <= Reset_v;
+				Reset_v := '1';
+			end if;
 		end if;
 	end process;
+
+	g_reset : if not SyncReset generate
+		Reset_s_n <= Reset_n;
+	end generate;
 
 	-- Registers/Interrupts
 	IO_RData <= "00" & Sleep_En & "0" & ISC1 & ISC0 when IO_Rd = '1' and IO_Addr = "110101" else "ZZZZZZZZ"; -- $35 MCUCR
 	IO_RData <= Int_En & "000000" when IO_Rd = '1' and IO_Addr = "111011" else "ZZZZZZZZ"; -- $3B GIMSK
 	IO_RData <= TOIE1 & OCIE1 & "00" & TICIE1 & "0" & TOIE0 & "0" when IO_Rd = '1' and IO_Addr = "111001" else "ZZZZZZZZ"; -- $39 TIMSK
 	IO_RData <= TOV1 & OCF1 & "00" & ICF1 & "0" & TOV0 & "0" when IO_Rd = '1' and IO_Addr = "111000" else "ZZZZZZZZ"; -- $38 TIFR
-	process (Reset_n, Clk)
+	process (Reset_s_n, Clk)
 	begin
-		if Reset_n = '0' then
+		if Reset_s_n = '0' then
 			Sleep_En <= '0';
 			ISC0 <= "00";
 			ISC1 <= "00";
@@ -303,7 +317,7 @@ begin
 	TCNT0_Sel <= '1' when IO_Addr = "110010" else '0';	-- $32 TCNT0
 	tc0 : AX_TC8 port map(
 			Clk => Clk,
-			Reset_n => Reset_n,
+			Reset_n => Reset_s_n,
 			T => T0,
 			TCCR_Sel => TCCR0_Sel,
 			TCNT_Sel => TCNT0_Sel,
@@ -319,7 +333,7 @@ begin
 	ICR1_Sel <= '1' when IO_Addr(5 downto 1) = "10100" else '0';	-- $24 ICR1
 	tc1 : AX_TC16 port map(
 			Clk => Clk,
-			Reset_n => Reset_n,
+			Reset_n => Reset_s_n,
 			T => T1,
 			ICP => ICP,
 			TCCR_Sel => TCCR1_Sel,
@@ -366,7 +380,7 @@ begin
 	PORTD_Sel <= '1' when IO_Addr = "010010" else '0';
 	porta : AX_Port port map(
 			Clk => Clk,
-			Reset_n => Reset_n,
+			Reset_n => Reset_s_n,
 			PORT_Sel => PORTB_Sel,
 			DDR_Sel => DDRB_Sel,
 			PIN_Sel => PINB_Sel,
@@ -377,7 +391,7 @@ begin
 			IOPort  => Port_B);
 	portb : AX_Port port map(
 			Clk => Clk,
-			Reset_n => Reset_n,
+			Reset_n => Reset_s_n,
 			PORT_Sel => PORTD_Sel,
 			DDR_Sel => DDRD_Sel,
 			PIN_Sel => PIND_Sel,
