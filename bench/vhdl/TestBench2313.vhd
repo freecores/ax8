@@ -23,7 +23,7 @@ begin
 
 	p1 : entity work.A90S2313 port map(Clk, Reset_n, KeyboardClk, '1', '1', '1', '1', RXD, TXD, OC, Port_B, Port_D);
 
-	as : AsyncStim generic map(FileName => "AX8.vhd", InterCharDelay => 0 us, Baud => 57600, Bits => 8)
+	as : AsyncStim generic map(FileName => "../../../rtl/vhdl/AX8.vhd", InterCharDelay => 0 us, Baud => 57600, Bits => 8)
 				port map(RXD);
 
 	al : AsyncLog generic map(FileName => "RX_Log.txt", Baud => 57600, Bits => 8)

@@ -16,7 +16,7 @@ begin
 
 	p1 : entity work.A90S1200 port map (Clk, Reset_n, '1', '1', Port_B, Port_D);
 
-	as : AsyncStim generic map(FileName => "AX8.vhd", InterCharDelay => 200 us, Baud => 115200, Bits => 8)
+	as : AsyncStim generic map(FileName => "../../../rtl/vhdl/AX8.vhd", InterCharDelay => 200 us, Baud => 115200, Bits => 8)
 				port map(Port_D(0));
 
 	al : AsyncLog generic map(FileName => "RX_Log.txt", Baud => 115200, Bits => 8)
