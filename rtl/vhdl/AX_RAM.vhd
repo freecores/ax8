@@ -1,7 +1,7 @@
 --
 -- AT90Sxxxx compatible microcontroller core
 --
--- Version : 0146
+-- Version : 0220
 --
 -- Copyright (c) 2001-2002 Daniel Wallner (jesus@opencores.org)
 --
@@ -44,6 +44,8 @@
 --
 -- File history :
 --
+--	0146 : First release
+--	0220 : Added support for XST
 
 library IEEE;
 use IEEE.std_logic_1164.all;
@@ -51,7 +53,7 @@ use IEEE.numeric_std.all;
 
 entity AX_RAM is
 	generic(
-		RAMAddressWidth : integer
+		RAMAddressWidth : integer := 8
 	);
 	port (
 		Clk			: in std_logic;
@@ -65,27 +67,29 @@ end AX_RAM;
 
 architecture rtl of AX_RAM is
 
-	type RAM_Image is array (2**RAMAddressWidth + 95 downto 96) of std_logic_vector(7 downto 0);
-	signal	DRAM	: RAM_Image;
-	signal	Addr_r	: std_logic_vector(RAMAddressWidth downto 0);
+	type RAM_Image is array (2**RAMAddressWidth + 95 downto 0) of std_logic_vector(7 downto 0);
+	signal	DRAM		: RAM_Image;
+	signal	Wr_Addr_r	: std_logic_vector(RAMAddressWidth downto 0);
+	signal	Rd_Addr_r	: std_logic_vector(RAMAddressWidth downto 0);
+	signal	Data_Out_i	: std_logic_vector(7 downto 0);
 
 begin
 
 	process (Clk)
 	begin
 		if Clk'event and Clk = '1' then
--- pragma translate_off
-			if not is_x(Rd_Addr) then
--- pragma translate_on
-				Data_Out <= DRAM(to_integer(unsigned(Rd_Addr(RAMAddressWidth downto 0))));
--- pragma translate_off
-			end if;
--- pragma translate_on
 			if Wr = '1' then
-				DRAM(to_integer(unsigned(Addr_r))) <= Data_In;
+				DRAM(to_integer(unsigned(Wr_Addr_r))) <= Data_In;
 			end if;
-			Addr_r <= Wr_Addr(RAMAddressWidth downto 0);
+			Wr_Addr_r <= Wr_Addr;
+			Rd_Addr_r <= Rd_Addr;
 		end if;
 	end process;
+
+	Data_Out <= DRAM(to_integer(unsigned(Rd_Addr_r)))
+-- pragma translate_off
+		when not is_x(Rd_Addr_r) else "--------"
+-- pragma translate_on
+	;
 
 end;

@@ -45,6 +45,8 @@
 --
 -- File history :
 --
+--	0146 : First release
+--	0220 : Added support for synchronous ROM
 
 library IEEE;
 use IEEE.std_logic_1164.all;

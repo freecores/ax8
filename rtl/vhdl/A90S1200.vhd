@@ -44,6 +44,9 @@
 --
 -- File history :
 --
+--	0146	: First release
+--	0220	: Changed to synchronous ROM
+--	0220b	: Changed reset
 
 --Registers:												Comments:
 --$3F SREG Status Register									Implemented in the AX8 core
